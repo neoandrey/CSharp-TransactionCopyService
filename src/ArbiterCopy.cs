@@ -16,6 +16,7 @@ using System.Net.Mail;
 using System.Data.OleDb;
 using System.Data.DataSetExtensions;
 using System.Data.SQLite;
+using System.Reflection;
 
 namespace ArbiterCopyService{
             public class  ArbiterCopy {
@@ -46,32 +47,89 @@ namespace ArbiterCopyService{
 
 				 internal  static  DataTable					    filterTableSchema                   =  new DataTable();
 
-				 internal  static  const int						DAILY_COPY_MODE						= 0;
+				 internal    const int					        	DAILY_COPY_MODE						= 0;
 
-				 internal static   const int                        SPECIFIC_COPY_MODE                  =  1;
+				 internal    const int                              SPECIFIC_COPY_MODE                  =  1;
 
-                internal   static  const  int                       RANGE_COPY_MODE						= 2;   
+                internal     const  int                            RANGE_COPY_MODE						= 2;   
 
-				internal          
+				internal     static readonly object                locker                               =            new object();
 
-                  // internal  static int   					ThreadCount                          =  0;
+				internal      static  Dictionary <string,DataTable>  reportTableMap  				    = 	 new Dictionary <string,DataTable> ();
+				internal    static StringBuilder emailBody											    = new StringBuilder();			
+				internal  static  Dictionary<int, string>  copyDateMap                     				= new  Dictionary<int, string> ();
+				internal  static  Dictionary<int, string>  copyTableNameMap                				= new  Dictionary<int, string> ();
+				internal  static  Dictionary<int, string>  copyFilterTableNameMap          				= new  Dictionary<int, string> ();
+				internal  static  Dictionary<int, string>  copyStartTimeMap	     		   				= new  Dictionary<int, string> ();
+				internal  static  Dictionary<int, string>  copyFilterStartTimeMap          				= new  Dictionary<int, string> ();
+				internal  static  Dictionary<int, string>  copyEndTimeMap          		   				= new Dictionary<int, string> ();
+				internal  static  Dictionary<int, string>  copyFilterEndTimeMap            				= new  Dictionary<int, string> ();
+				internal  static  Dictionary<int, long>    copyTransCountMap       		   				= new Dictionary<int, long> 	 ();
+				internal  static  Dictionary<int, long>    copyFilterTransCountMap  	  				= new Dictionary<int, long>   ();
+				internal  static  Dictionary<int, long>    copyInsertedTransCountMap       				= new Dictionary<int, long>   ();
+				internal  static  Dictionary<int, long>    copyFilterInsertedTransCountMap			    = new Dictionary<int, long>   ();
 
-                 static readonly object locker = new object();
+				internal  static  string[]                  copyFilterScript;
 
-				// static bool   runWebServer                                 =     false;
+
 
 				 public ArbiterCopy(){
-
 						new  ArbiterCopyUtilLibrary();
+									DataTable table = new DataTable("PropertiesTable");
+			
+				DataColumn column;
+				DataRow row;  
+				column				        = new DataColumn();
+				
+				column.DataType 		     = System.Type.GetType("System.Int32");
+				column.ColumnName 		     = "no.";
+				column.ReadOnly 		     = true;
+				column.Unique 				 = true;
+				column.AutoIncrement 		 = true;
+				table.Columns.Add(column);
+				column				     	 = new DataColumn();
+				column.DataType 			 = System.Type.GetType("System.String");
+				column.ColumnName 		     = "parameter_name";
+				column.AutoIncrement 		 = false;
+				column.Caption 				 = "ParameterName";
+				column.ReadOnly 			 = false;
+				column.Unique 				 = true;
+				table.Columns.Add(column);
+				column 						 = new DataColumn();
+				column.DataType 			 = System.Type.GetType("System.String");
+				column.ColumnName 			 = "parameter_value";
+				column.AutoIncrement 		 = false;
+				column.Caption 				 = "ParameterValue";
+				column.ReadOnly 			 = false;
+				column.Unique 				 = false;
+				table.Columns.Add(column);
+
+				DataColumn[] PrimaryKeyColumns = new DataColumn[1];
+				PrimaryKeyColumns[0] = table.Columns["no."];
+				table.PrimaryKey = PrimaryKeyColumns;
+				
+				foreach (PropertyInfo prop in ArbiterCopyUtilLibrary.arbiterConfig.GetType().GetProperties())
+				{
+					row = table.NewRow();
+					row["parameter_name"]  = prop.Name;
+					row["parameter_value"] = prop.GetValue(ArbiterCopyUtilLibrary.arbiterConfig,  null);
+					table.Rows.Add(row);
+						
+				}
+	
+				reportTableMap.Add("Arbiter Copy Session Parameters",table);
+
+
 						startArbiterCopy();
             	
 				 }
 
                 public ArbiterCopy(string  config){
-				  if(File.Exists(nuConfig)){
+				  
 				
 					string  nuConfig   = config.Contains("\\\\")? config:config.Replace("\\", "\\\\");
-					new  ArbiterCopyUtilLibrary(config);
+					if(File.Exists(nuConfig)){
+					new  ArbiterCopyUtilLibrary(nuConfig);
                    	startArbiterCopy();
 
 					} else{
@@ -112,65 +170,67 @@ namespace ArbiterCopyService{
                                 Environment.Exit(0);
 							}
 
-							DateTime startParameterValue	 = DateTime.ParseExact(ArbiterCopyUtilLibrary.copyStartParameterValue, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture); ;
-                            DateTime endParameterValue	 = DateTime.ParseExact(ArbiterCopyUtilLibrary.copyStartParameterValue, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture); ;
+							DateTime startParameterValue	   =  DateTime.Now;// DateTime.ParseExact(ArbiterCopyUtilLibrary.copyStartParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+                            DateTime endParameterValue	       =  DateTime.Now;// DateTime.ParseExact(ArbiterCopyUtilLibrary.copyEndParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture); ;
                            
 						     switch(ArbiterCopyUtilLibrary.arbiterCopyMode){
 
 								 case DAILY_COPY_MODE:
+								 startParameterValue = string.IsNullOrEmpty(ArbiterCopyUtilLibrary.copyStartParameterValue) || ArbiterCopyUtilLibrary.copyStartParameterValue =="default" ?DateTime.Now:DateTime.ParseExact(ArbiterCopyUtilLibrary.copyStartParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
 
 								int  numOfPrevDays          = ArbiterCopyUtilLibrary.numOfDaysFromStart;
 								endParameterValue           = startParameterValue.AddDays(-1*numOfPrevDays);
 
-
-							long startParamVal = long.Parse(startParameterValue.ToString("yyyy-MM-dd"));
+                            
+							long startParamVal = long.Parse(startParameterValue.ToString("yyyyMMdd"));
 							
-							long endParamVal   = long.Parse(endParameterValue.ToString("yyyy-MM-dd"));
+							long endParamVal   = long.Parse(endParameterValue.ToString("yyyyMMdd"));
 
-							long currentVal    = endParamVal;
-
-								while(currentVal  <= startParamVal){
-
+							long currentVal    = startParamVal;
+                            int numberOfTables = 0;
+								while(currentVal   >= endParamVal){
+									Console.WriteLine("currentVal: "+currentVal.ToString());
+									copyDateMap.Add(numberOfTables, currentVal.ToString());
+									ArbiterCopyUtilLibrary.writeToLog("currentVal: "+currentVal.ToString());
 								    partitionSizeIntervalMap.Add(currentVal.ToString(), currentVal.ToString());
-									currentVal +=1; 
+									currentVal -=1; 
 									++numberOfTables;								
 								}
 								 break;
 								 case SPECIFIC_COPY_MODE:
-
+								  startParameterValue	   =  DateTime.ParseExact(ArbiterCopyUtilLibrary.copyStartParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+                                 endParameterValue	       = DateTime.ParseExact(ArbiterCopyUtilLibrary.copyEndParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture); ;
+                                  numberOfTables           =  0;
+                                    
 								   foreach(string  dateStr in  ArbiterCopyUtilLibrary.arbiterCopySpecificParamterValues){
-		
-										partitionSizeIntervalMap.Add(DateTime.ParseExact(dateStr, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture).ToString("yyyy-MM-dd"), DateTime.ParseExact(dateStr, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture).ToString("yyyy-MM-dd"));
-
+									    copyDateMap.Add(numberOfTables,DateTime.ParseExact(dateStr, "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture).ToString("yyyy-MM-dd"));
+										partitionSizeIntervalMap.Add(DateTime.ParseExact(dateStr, "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture).ToString("yyyy-MM-dd"), DateTime.ParseExact(dateStr, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture).ToString("yyyy-MM-dd"));
+                                        ++numberOfTables;
 								   }
 
 								 break;
 								 case  RANGE_COPY_MODE:
+								  startParameterValue	   =  DateTime.ParseExact(ArbiterCopyUtilLibrary.copyStartParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+                                   endParameterValue	       = DateTime.ParseExact(ArbiterCopyUtilLibrary.copyEndParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture); ;
+                                   numberOfTables   = 0;
 
-									    startParamVal = long.Parse(startParameterValue.ToString( "yyyy-MM-dd"));
+									    startParamVal = long.Parse(startParameterValue.ToString( "yyyyMMdd"));
 										currentVal    = startParamVal;
-									    endParamVal   = long.Parse(endParameterValue.ToString( "yyyy-MM-dd"));
+									    endParamVal   = long.Parse(endParameterValue.ToString( "yyyyMMdd"));
 										while( currentVal <= endParamVal){
-
+                                                copyDateMap.Add(numberOfTables, currentVal.ToString());
 												partitionSizeIntervalMap.Add(startParamVal.ToString(), endParamVal.ToString());
 												++numberOfTables;
 												currentVal   = currentVal  +1;
-
 										}
 								 break;
 							 }
-
-						   
-
-							// hasQuotes(ArbiterCopyUtilLibrary.partitioningParameterMinVal)?ArbiterCopyUtilLibrary.partitioningParameterMinVal:quoteString(ArbiterCopyUtilLibrary.partitioningParameterMinVal) ;
-				
-
 									
                   			    string copyScriptStr      =   File.ReadAllText(ArbiterCopyUtilLibrary.copyScript);
 							    string filterScriptStr    =  File.ReadAllText( ArbiterCopyUtilLibrary.arbiterFilterCopyScript);
 
                     			getSchemaTable( copyScriptStr.Replace(ArbiterCopyUtilLibrary.copyStartParameter,"\'2000-01-01\'"));
-								getFilterTableSchema( filterScriptStr.Replace(ArbiterCopyUtilLibrary.copyStartParameter,"\'2000-01-01\'")
+								getFilterTableSchema( filterScriptStr.Replace(ArbiterCopyUtilLibrary.copyStartParameter,"2000-01-01")
 								                                     .Replace("ARBITER_DESTINATION_TABLE",ArbiterCopyUtilLibrary.destinationTable));
 
 								if(schemaTable.Columns.Count > 0 ){
@@ -180,6 +240,7 @@ namespace ArbiterCopyService{
 								
 							    arbiterCopyFilterTables      		     = new System.Data.DataTable[numberOfTables];
 								arbiterCopyFilterThreads     			 = new Thread[numberOfTables];
+								copyFilterScript						 = new string[numberOfTables];
 
 								ArbiterCopyUtilLibrary.concurrentThreads = numberOfTables;
 								
@@ -187,11 +248,11 @@ namespace ArbiterCopyService{
                                 int threadCounter = 0;
 								foreach(KeyValuePair<string, string>  param in partitionSizeIntervalMap){
 									
-								 string  copySQL	         	= copyScriptStr.Replace(ArbiterCopyUtilLibrary.copy_start_parameter,param.Key);
-								 copySQL    	      	        = copySQL.Replace(ArbiterCopyUtilLibrary.copy_end_parameter, param.Value);
+								 string  copySQL	         	= copyScriptStr.Replace(ArbiterCopyUtilLibrary.copyStartParameter,param.Key);
+								 copySQL    	      	        = copySQL.Replace(ArbiterCopyUtilLibrary.copyEndParameter, param.Value);
                                 
-								 string  copyFilterSQL	        = filterScriptStr.Replace(ArbiterCopyUtilLibrary.copy_start_parameter,param.Key);
-								 copyFilterSQL    	      	    = copyFilterSQL.Replace(ArbiterCopyUtilLibrary.copy_end_parameter, param.Value)
+								 string  copyFilterSQL	        = filterScriptStr.Replace(ArbiterCopyUtilLibrary.copyStartParameter,param.Key);
+								 copyFilterSQL    	      	    = copyFilterSQL.Replace(ArbiterCopyUtilLibrary.copyEndParameter, param.Value)
 								                                            .Replace("ARBITER_DESTINATION_TABLE",ArbiterCopyUtilLibrary.destinationTable);
 
 								 
@@ -209,14 +270,11 @@ namespace ArbiterCopyService{
 
 									 arbiterCopyFilterThreads[currentIndex]  = 	new Thread(()=> {
 										
-										 runArbiterTransactionCopyFilter("target",copyFilterSQL,currentIndex);
+										 runArbiterTransactionCopyFilter("destination",copyFilterSQL,currentIndex);
 									
 									});
 									arbiterCopyFilterThreads[currentIndex].Name    =   "arbiterCopyThread."+currentIndex.ToString();
 									arbiterCopyFilterThreadMap.Add(currentIndex,arbiterCopyFilterThreads[currentIndex]);
-
-
-
 									++threadCounter;
                         			}
 								
@@ -226,35 +284,162 @@ namespace ArbiterCopyService{
 							    Console.WriteLine("WAIT_INTERVAL: "+ArbiterCopyUtilLibrary.WAIT_INTERVAL.ToString());
 							    ArbiterCopyUtilLibrary.writeToLog("WAIT_INTERVAL: "+ArbiterCopyUtilLibrary.WAIT_INTERVAL.ToString());
 						        Console.WriteLine("ArbiterCopyUtilLibrary.concurrentThreads: "+ArbiterCopyUtilLibrary.concurrentThreads.ToString());
-							    int trCounter  = 0;
-							    foreach(Thread threadDetail in arbiterCopyThreads){
-                                    Console.WriteLine("Checking for the number of running threads...");
-                                    wait();
-									if(runningThreadSet.Count < (ArbiterCopyUtilLibrary.concurrentThreads*2)) {
-
-                                        Console.WriteLine("Current number of threads running: "+runningThreadSet.Count.ToString());
-										Console.WriteLine("Waiting for  "+ArbiterCopyUtilLibrary.WAIT_INTERVAL.ToString());
-									   if(threadDetail!= null) {
-									      threadDetail.Start();
-										  runningThreadSet.Add(threadDetail);
-									   }
-									    if(arbiterCopyFilterThreads[trCounter]!= null) {
-									      arbiterCopyFilterThreads[trCounter].Start();
-										  runningThreadSet.Add(arbiterCopyFilterThreads[trCounter]);
-									   }
-									   ++trCounter;
-									}
-							}
-							 
 							
-                               while(runningThreadSet.Count!=0){
-                       				 wait();
-							   }
-                            
-
-							//  createFinalView(numberOfTables);
+							//    foreach(Thread threadDetail in arbiterCopyThreads){
+								for(int i=0; i< arbiterCopyThreads.Length; i++){
 
 
+                                        Console.WriteLine("Starting thread: "+i.ToString());
+										ArbiterCopyUtilLibrary.writeToLog("Starting thread: "+i.ToString());
+										if(arbiterCopyThreads[i]!= null) {
+									      arbiterCopyThreads[i].Start();
+										  runningThreadSet.Add(arbiterCopyThreads[i]);
+									   }
+									    if(arbiterCopyFilterThreads[i]!= null) {
+									      arbiterCopyFilterThreads[i].Start();
+										  runningThreadSet.Add(arbiterCopyFilterThreads[i]);
+									   }
+									
+									 
+							}
+							ArbiterCopyUtilLibrary.writeToLog("All threads started. Waiting for matching threads to finish");
+							Console.WriteLine("All threads started. Waiting for matching threads to finish");
+							 wait();
+																				
+							DataTable table = new DataTable("SessionTable");
+							
+								DataColumn column;
+								DataRow row;  
+								column				         = new DataColumn();
+								
+								column.DataType 		     = System.Type.GetType("System.Int32");
+								column.ColumnName 		     = "no.";
+								column.ReadOnly 		     = true;
+								column.Unique 				 = true;
+								column.AutoIncrement 		 = true;
+								table.Columns.Add(column);
+								column				     	 = new DataColumn();
+								column.DataType 			 = System.Type.GetType("System.String");
+								column.ColumnName 		     = "transation_date";
+								column.AutoIncrement 		 = false;
+								column.Caption 				 = "TransactionDate";
+								column.ReadOnly 			 = false;
+								column.Unique 				 = true;
+								table.Columns.Add(column);
+								column 						 = new DataColumn();
+								column.DataType 			 = System.Type.GetType("System.String");
+								column.ColumnName 			 = "copy_staging_table_name";
+								column.AutoIncrement 		 = false;
+								column.Caption 				 = "CopyStagingTableName";
+								column.ReadOnly 			 = false;
+								column.Unique 				 = true;
+								table.Columns.Add(column);
+								column 						 = new DataColumn();
+								column.DataType 			 = System.Type.GetType("System.String");
+								column.ColumnName 			 = "filter_staging_table_name";
+								column.AutoIncrement 		 = false;
+								column.Caption 				 = "FilterStagingTableName";
+								column.ReadOnly 			 = false;
+								column.Unique 				 = true;
+								table.Columns.Add(column);
+								column 						 = new DataColumn();
+								column.DataType 			 = System.Type.GetType("System.String");
+								column.ColumnName 			 = "transaction_copy_start_time";
+								column.AutoIncrement 		 = false;
+								column.Caption 				 = "TransactionCopyStartTime";
+								column.ReadOnly 			 = false;
+								column.Unique 				 = false;
+								table.Columns.Add(column);
+								column 						 = new DataColumn();
+								column.DataType 			 = System.Type.GetType("System.String");
+								column.ColumnName 			 = "filter_copy_start_time";
+								column.AutoIncrement 		 = false;
+								column.Caption 				 = "FilterCopyStartTime";
+								column.ReadOnly 			 = false;
+								column.Unique 				 = false;
+								table.Columns.Add(column);
+								column 						 = new DataColumn();
+								column.DataType 			 = System.Type.GetType("System.String");
+								column.ColumnName 			 = "transaction_copy_duration";
+								column.AutoIncrement 		 = false;
+								column.Caption 				 = "TransactionCopyDuration";
+								column.ReadOnly 			 = false;
+								column.Unique 				 = false;
+								table.Columns.Add(column);
+								column 						 = new DataColumn();
+								column.DataType 			 = System.Type.GetType("System.String");
+								column.ColumnName 			 = "filter_copy_duration";
+								column.AutoIncrement 		 = false;
+								column.Caption 				 = "filterCopyDuration";
+								column.ReadOnly 			 = false;
+								column.Unique 				 = false;
+								table.Columns.Add(column);
+								column 						 = new DataColumn();
+								column.DataType 			 = System.Type.GetType("System.String");
+								column.ColumnName 			 = "transaction_staging_count";
+								column.AutoIncrement 		 = false;
+								column.Caption 				 = "TransactionStagingCount";
+								column.ReadOnly 			 = false;
+								column.Unique 				 = false;
+								table.Columns.Add(column);
+								column 						 = new DataColumn();
+								column.DataType 			 = System.Type.GetType("System.String");
+								column.ColumnName 			 = "filter_staging_count";
+								column.AutoIncrement 		 = false;
+								column.Caption 				 = "FilterStagingCount";
+								column.ReadOnly 			 = false;
+								column.Unique 				 = false;
+								table.Columns.Add(column);
+								column 						 = new DataColumn();
+								column.DataType 			 = System.Type.GetType("System.String");
+								column.ColumnName 			 = "inserted_transaction_count";
+								column.AutoIncrement 		 = false;
+								column.Caption 				 = "InsertedTransactionCount";
+								column.ReadOnly 			 = false;
+								column.Unique 				 = false;
+								table.Columns.Add(column);
+
+
+								DataColumn[] PrimaryKeyColumns = new DataColumn[1];
+								PrimaryKeyColumns[0] = table.Columns["no."];
+								table.PrimaryKey = PrimaryKeyColumns;
+
+								string  filterTableName               = "";
+								string  tranStagingTable              = "";
+								for (int  i=0; i< numberOfTables;  i++){
+								tranStagingTable                      = ArbiterCopyUtilLibrary.arbiterCopyTableNamePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType.ToLower()+"_"+i.ToString();
+								filterTableName                       = ArbiterCopyUtilLibrary.arbiterCopyFilterTablePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType.ToLower()+"_"+i.ToString();
+
+								copyTransCountMap.Add(i, getAggregateFromTable("COUNT",tranStagingTable, "*", "destination" ));
+								copyFilterTransCountMap.Add(i, getAggregateFromTable("COUNT",filterTableName, "*", "destination" ));
+
+								}
+
+								for (int i=0; i<numberOfTables; i++){
+																
+																		
+									row      				                      = table.NewRow();
+									row["transation_date"]            			  = copyDateMap[i];
+									row["copy_staging_table_name"]    			  = copyTableNameMap[i];
+									row["filter_staging_table_name"]    		  = copyFilterTableNameMap[i];
+									row["transaction_copy_start_time"]   		  = copyStartTimeMap[i];
+									row["filter_copy_start_time"] 				  = copyFilterStartTimeMap[i] ;
+									TimeSpan tranCopyDuration                     = DateTime.Parse(copyEndTimeMap[i], System.Globalization.CultureInfo.InvariantCulture).Subtract(DateTime.Parse(copyStartTimeMap[i], System.Globalization.CultureInfo.InvariantCulture));
+									row["transaction_copy_duration"]    		  = String.Format("{0} hours, {1} minutes, {2} seconds", tranCopyDuration.Hours, tranCopyDuration.Minutes, tranCopyDuration.Seconds);		
+									TimeSpan tranFilterCopyDuration               = DateTime.Parse(copyFilterEndTimeMap[i], System.Globalization.CultureInfo.InvariantCulture).Subtract(DateTime.Parse(copyFilterStartTimeMap[i], System.Globalization.CultureInfo.InvariantCulture));
+									row["filter_copy_duration"]  			      = 	String.Format("{0} hours, {1} minutes, {2} seconds", tranFilterCopyDuration.Hours, tranFilterCopyDuration.Minutes, tranFilterCopyDuration.Seconds);
+									row["transaction_staging_count"]  			  = copyTransCountMap[i];
+									row["filter_staging_count"]  			      = copyFilterTransCountMap[i];
+									row["inserted_transaction_count"]  			  = copyInsertedTransCountMap[i]; 
+									table.Rows.Add(row);
+
+								}
+								
+								reportTableMap.Add("Arbiter Session Details",table);
+
+
+
+								sendMailNotification(reportTableMap);
 						} else{
                     
 					    Console.WriteLine("Could not get Schema for destination table");
@@ -262,6 +447,9 @@ namespace ArbiterCopyService{
                         Environment.Exit(0);
 
                     }
+
+
+
 						}else{
 								Console.WriteLine("Unable to connect to source database: "+ArbiterCopyUtilLibrary.sourceServer);
 								ArbiterCopyUtilLibrary.writeToLog("Unable to connect to source database: "+ArbiterCopyUtilLibrary.sourceServer);
@@ -297,7 +485,8 @@ namespace ArbiterCopyService{
 
 				string   targetConnectionString         = connectionStringMap[sourceServer];
 			 	arbiterCopyTables[tabInd]               = new DataTable();
-				string  tableName                       = ArbiterCopyUtilLibrary.arbiterCopyTableNamePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType+"_"+tabInd.ToString();
+				string  tableName                       = ArbiterCopyUtilLibrary.arbiterCopyTableNamePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType.ToLower()+"_"+tabInd.ToString();
+				copyTableNameMap.Add(tabInd,tableName);
 				try{
                 lock (locker)
                 {	Console.WriteLine("Running fetch script for table: "+tabInd.ToString());
@@ -306,8 +495,9 @@ namespace ArbiterCopyService{
 							ArbiterCopyUtilLibrary.writeToLog("Running fetch script for table: " + tabInd.ToString()+"\n"+bulkQuery);
 					}
 				}
-
+				copyStartTimeMap.Add(tabInd,DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 bulkCopyDataFromRemoteServer(bulkQuery, tableName);
+				copyEndTimeMap.Add(tabInd,DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
 
 			}catch(Exception e){
 
@@ -329,13 +519,12 @@ namespace ArbiterCopyService{
 
 				  int activeThreadCount               =  0;
 				  HashSet<int> completedThreadSet     =  new  HashSet<int>();
-				  int  threadCount                    =  0;
 				  int shouldWait                      =  1;
 				  int  skippedCount					  =  0;
 				  while(shouldWait!= 0){
 					  		 shouldWait               =  0;
 						     skippedCount			  =  0;
-                             
+                             activeThreadCount        =  0;
 							 foreach(Thread arbCopyThread  in arbiterCopyThreads){
 								
 								if(arbCopyThread.IsAlive){
@@ -343,7 +532,15 @@ namespace ArbiterCopyService{
                       				 
 								}
 						 	}
-              
+
+							 	 foreach(Thread arbCopyFilterThread  in arbiterCopyFilterThreads){
+						
+								if(arbCopyFilterThread.IsAlive){
+										++activeThreadCount;
+                      				 
+								}
+						 	}
+            
                            if(completedThreadSet.Count !=arbiterCopyThreads.Length){
               
 					        for (int i =  0;  i< arbiterCopyThreads.Length; i++ ) {
@@ -366,13 +563,12 @@ namespace ArbiterCopyService{
 							if(shouldWait>0){
 									Console.WriteLine("Waiting for  " + ArbiterCopyUtilLibrary.WAIT_INTERVAL.ToString());
 								Thread.Sleep(ArbiterCopyUtilLibrary.WAIT_INTERVAL);  
-								activeThreadCount = 0;
 							}
 
 							Console.WriteLine("Current completed thread count: "+completedThreadSet.Count.ToString());
-							Console.WriteLine("Current running count: "+runningThreadSet.Count.ToString());
+							Console.WriteLine("Current running count: "+activeThreadCount.ToString());
 							ArbiterCopyUtilLibrary.writeToLog("Current completed thread count: " + completedThreadSet.Count.ToString());
-							ArbiterCopyUtilLibrary.writeToLog("Current running thread count: "+runningThreadSet.Count.ToString());
+							ArbiterCopyUtilLibrary.writeToLog("Current running thread count: "+activeThreadCount.ToString());
 						} else{
 
 
@@ -402,9 +598,9 @@ namespace ArbiterCopyService{
 							}
 						}
 						 Console.WriteLine("Current completed thread count: " + completedThreadSet.Count.ToString());
-                		Console.WriteLine("Current running count: " + runningThreadSet.Count.ToString());
+                		Console.WriteLine("Current running count: " +activeThreadCount.ToString());
                		    ArbiterCopyUtilLibrary.writeToLog("Current completed thread count: " + completedThreadSet.Count.ToString());
-                		ArbiterCopyUtilLibrary.writeToLog("Current running thread count: " + runningThreadSet.Count.ToString());
+                		ArbiterCopyUtilLibrary.writeToLog("Current running thread count: " + activeThreadCount.ToString());
 						if(skippedCount==arbiterCopyThreads.Length)break;
 				  }
 
@@ -414,38 +610,7 @@ namespace ArbiterCopyService{
 
 
             }
-			  
-
-			  public static void outputTableData(int  tableIndex){
-                // string     tableFileName  =   getTempFilePath(tableIndex) + "\\" + ArbiterCopyUtilLibrary.temporaryFileNamePrefix + "_" + tableIndex.ToString() + ".csv";
-                // Console.WriteLine("Reading file: " +tableFileName);
-                 // ArbiterCopyUtilLibrary.writeToLog("Reading file: " + tableFileName);
-			     //  DataTable reportTable     =   readStoredTableData(tableFileName);
-			     // loadDataFromSQLite(tableIndex); 
-				  lock (locker)
-                	{
-			     if(ArbiterCopyUtilLibrary.reportOutputMethod == ArbiterCopyUtilLibrary.TABLE_OUTPUT_METHOD){
-						string server  = "destination";
-						if(isFirstInsert){
-
-								createSQLTableFromDataTable(ArbiterCopyUtilLibrary.reportTableName, arbiterCopyTables[tableIndex], connectionStringMap[server]);	
-								isFirstInsert = false;				
-						}
-                 
-                			bulkCopyTableData(server,arbiterCopyTables[tableIndex],ArbiterCopyUtilLibrary.reportTableName);
-				 
-
-            /*    if (File.Exists(tableFileName))
-                {
-                    File.Delete(tableFileName);
-                }
-
-				*/
-			 }
-					}
-
-				arbiterCopyTables[tableIndex].Clear();
-			  }
+			
 
 			  public static void createSQLTableFromDataTable(string destTableName, DataTable  reportTable, string connectionString){
                 
@@ -561,7 +726,7 @@ namespace ArbiterCopyService{
 						return isReachable;
 			  }
 			  
-              public   DataTable  getDataFromSQL(string theScript, string targetConnectionString ){
+              public  static  DataTable  getDataFromSQL(string theScript, string targetConnectionString ){
 	         
                 DataTable  dt = new DataTable();
 
@@ -659,6 +824,14 @@ namespace ArbiterCopyService{
 
 
 				
+			
+			 public static long getAggregateFromTable (string aggr, string tableName,string columnName, string server){
+				  
+				   string script                       = "SELECT  aggr_val  = "+aggr+"("+columnName+") FROM "+tableName+" WITH (NOLOCK)";
+				   DataTable aggregateVal 			   = getDataFromSQL(script, connectionStringMap[server]);
+				   return string.IsNullOrEmpty(aggregateVal.Rows[0]["aggr_val"].ToString())?0: long.Parse(aggregateVal.Rows[0]["aggr_val"].ToString());    
+
+			}	
              public static void bulkCopyTableData(string server, DataTable dTab , string  destTable){
 
                         string  connectionStr = connectionStringMap[server];
@@ -675,7 +848,7 @@ namespace ArbiterCopyService{
 											bulkCopy.ColumnMappings.Add(col.ColumnName, col.ColumnName);
 									
                                 }						
-								bulkCopy.BulkCopyTimeout = 0;
+								bulkCopy.BulkCopyTimeout = 0; 
 								bulkCopy.BatchSize =  ArbiterCopyUtilLibrary.batchSize;
 								bulkCopy.DestinationTableName = destTable;
 								bulkCopy.WriteToServer(dTab);
@@ -698,256 +871,14 @@ namespace ArbiterCopyService{
                 }
 
 
-      public  static  void  exportTableToCSV(DataTable dt, string  fileName){
-
-					StringBuilder sb = new StringBuilder(); 
-
-					if(File.Exists(fileName))
-						{
-							File.Delete(fileName);
-						}
-
-					IEnumerable<string> columnNames = dt.Columns.Cast<DataColumn>().
-					Select(column => column.ColumnName);
-					sb.AppendLine(string.Join(",", columnNames));
-
-					foreach (DataRow row in dt.Rows)
-					{
-					IEnumerable<string> fields = row.ItemArray.Select(field => field.ToString());
-					sb.AppendLine(string.Join(",", fields));
-					}
-
-					File.WriteAllText(fileName, sb.ToString());
-
-	  }
-
-        public static DataTable readStoredTableData(string strFilePath)
-        {
-            DataTable dt = new DataTable();
-            using (StreamReader sr = new StreamReader(strFilePath))
-            {
-                string[] headers = sr.ReadLine().Split(new string[] { ArbiterCopyUtilLibrary.temporaryFileFieldDelimeter }, StringSplitOptions.None);
-                foreach (string header in headers)
-                {
-                    dt.Columns.Add(header);
-                }
-                while (!sr.EndOfStream)
-                {
-                    string[] rows = sr.ReadLine().Split(new string[] { ArbiterCopyUtilLibrary.temporaryFileFieldDelimeter }, StringSplitOptions.None);
-                    DataRow dr = dt.NewRow();
-                    for (int i = 0; i < headers.Length; i++)
-                    {
-                        dr[i] = rows[i];
-                    }
-                    dt.Rows.Add(dr);
-                }
-
-            }
-            return dt;
-        }
-
-        public static string getTempFilePath(int fileIndex)
-        {
-
-            int mapSize = ArbiterCopyUtilLibrary.tempFileDriveMap.Count;
-            int modulo = fileIndex % mapSize;
-            return ArbiterCopyUtilLibrary.tempFilePathMap[modulo];
-
-        }
-
-		public  void  exportToSQLite(int  index){
-		
-		string dbFileName       =  getTempFilePath(index)+ "\\" + ArbiterCopyUtilLibrary.temporaryFileNamePrefix + "_" + index.ToString() + ".sqlite";
-		string sqliteTableName  =  ArbiterCopyUtilLibrary.temporaryTableName+"_"+index.ToString();
-		if (!File.Exists(dbFileName)){
-		 try{
-            using( SQLiteConnection liteConnect = new SQLiteConnection("Data Source="+dbFileName+";Version=3;")){
-			liteConnect.Open();
-			string sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name='"+sqliteTableName+"';";
-			Console.WriteLine("Running: "+sql);
-
-			SQLiteCommand command = new SQLiteCommand(sql, liteConnect);
-			Object result = command.ExecuteScalar();
-			command.Dispose();
-			Console.WriteLine("result: "+result.ToString());
-			
-			if(result.ToString() != "1"){
-				
-			  StringBuilder  createSqlBuilder   = new StringBuilder();
-			  createSqlBuilder.Append(" CREATE TABLE ["+sqliteTableName+"] ( ");
-			  string colDataType  = "";
-			  foreach(DataColumn col in arbiterCopyTables[index].Columns){
-		 
-		 		if(col.DataType.Name.ToString()=="Boolean")
-		 		{
-		 		colDataType = "INTEGER";
-		 		}
-		 		if(col.DataType.Name.ToString()=="Byte")
-		 		{
-		 		colDataType = "BLOB";
-		 		}
-		 		if(col.DataType.Name.ToString()=="Char")
-		 		{
-		 		    colDataType = "TEXT";
-		 		}
-		 		if(col.DataType.Name.ToString()=="TEXT")
-		 		{
-		 		colDataType = "TEXT";
-		 		}
-		 		if(col.DataType.Name.ToString()=="Decimal")
-		 		{
-		 		colDataType = "REAL";
-		 		}
-		 		if(col.DataType.Name.ToString()=="Double")
-		 		{
-		 		colDataType = "REAL";
-		 		}
-		 		if(col.DataType.Name.ToString()=="Int16")
-		 		{
-		 		colDataType = "INTEGER";
-		 		}
-		 		if(col.DataType.Name.ToString()=="Int32")
-		 		{
-		 		colDataType = "INTEGER";
-		 		}
-		 		if(col.DataType.Name.ToString()=="Int64")
-		 		{
-		 		colDataType = "INTEGER";
-		 		}
-		 		if(col.DataType.Name.ToString()=="SByte")
-		 		{
-		 		colDataType = "BLOB";
-		 		}
-		 		if(col.DataType.Name.ToString()=="Single")
-		 		{
-		 		colDataType = "BLOB";
-		 		}
-		 		if(col.DataType.Name.ToString()=="String")
-		 
-		 		{
-		 			colDataType = "TEXT";
-		 		}
-		 		if(col.DataType.Name.ToString()=="TimeSpan")
-		 
-		 		{
-		 			colDataType = "TEXT";
-		 		}
-		 		if(col.DataType.Name.ToString()=="UInt16")
-		 
-		 		{
-		 			colDataType = "TEXT";
-		 		}
-		 		if(col.DataType.Name.ToString()=="UInt32")
-		 
-		 		{
-		 			colDataType = "INTEGER";
-		 		}
-		 		if(col.DataType.Name.ToString()=="UInt64")
-		 
-		 		{
-		 			colDataType = "INTEGER";
-		 		}
-		 		
-					createSqlBuilder.Append(col.ColumnName);
-					createSqlBuilder.Append("\t");
-					createSqlBuilder.Append(colDataType);
-					createSqlBuilder.Append(",");
-
-		 	 	 }
-				createSqlBuilder.Length--;
-				createSqlBuilder.Append(" );");		  			    
-				string sql2 = createSqlBuilder.ToString();
-				ArbiterCopyUtilLibrary.writeToLog("Running: "+sql2);
-				SQLiteCommand command2 = new SQLiteCommand(sql2, liteConnect);
-				command2.CommandTimeout = -1;
-				command2.ExecuteNonQuery();
-				command2.Dispose();
-			
-			}
-			StringBuilder  tableColumnString  = new StringBuilder();
-			  foreach (DataColumn column in arbiterCopyTables[index].Columns){
-			  
-			      tableColumnString.Append(column.ColumnName.ToString()).Append(",");
-			 
-			 }
-			 tableColumnString.Length--;
-			StringBuilder  insertBuilder      = new StringBuilder();
-			
-		   foreach (DataRow row in arbiterCopyTables[index].Rows){
-		            insertBuilder.Append("INSERT INTO ").Append(sqliteTableName).Append("( ").Append(tableColumnString.ToString()).Append(" ) VALUES ( ");
-			    foreach (DataColumn column in arbiterCopyTables[index].Columns){
-			      
-			      if(column.DataType.Name.ToString().Contains("TEXT") || column.DataType.Name.ToString().Contains("Char") || column.DataType.Name.ToString().Contains("String") ) {
-			      
-			        insertBuilder.Append("\'").Append(row[column].ToString()).Append(", ").Append("\'");
-			    
-			       } else{
-			         insertBuilder.Append(row[column].ToString()).Append(", ");
-			       }
-			    
-			      }
-			      insertBuilder.Length--;
-			      insertBuilder.Append(") ");
-			      SQLiteCommand command3 = new SQLiteCommand(insertBuilder.ToString(), liteConnect);
-			      command3.CommandTimeout = -1;
-			      command3.ExecuteNonQuery();
-			      command3.Dispose();
-			      
-			    }
-			//	arbiterCopyTables[index].Clear();
-			}	
-		}catch(Exception e){
-				ArbiterCopyUtilLibrary.writeToLog("Error saving table with  index "+index+" to SQLite. Message : " + e.Message);
-				Console.WriteLine("Error saving table with  index "+index+" to SQLite. Message : " + e.Message);
-				ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
-				ArbiterCopyUtilLibrary.writeToLog(e.ToString());
-				Console.WriteLine(e.StackTrace);
-				Console.WriteLine(e.ToString());
-				 
-			  }
-		}
-		}
-
-
-	public  static  void  loadDataFromSQLite(int  index){
-	
-		string dbFileName       =  getTempFilePath(index)+ "\\" + ArbiterCopyUtilLibrary.temporaryFileNamePrefix + "_" + index.ToString() + ".sqlite";
-		string sqliteTableName  =  ArbiterCopyUtilLibrary.temporaryTableName+"_"+index.ToString();	
-		if (File.Exists(dbFileName)){
-		try{
-                    using (SQLiteConnection liteConnect = new SQLiteConnection("Data Source=" + dbFileName + ";Version=3;"))
-                    {
-                        liteConnect.Open();
-                        string sql = "SELECT  * FROM " + sqliteTableName + ";";
-                        Console.WriteLine("Running: " + sql);
-                        SQLiteCommand command = new SQLiteCommand(sql, liteConnect);
-                        arbiterCopyTables[index] = new DataTable();
-                        SQLiteDataReader reader = command.ExecuteReader();
-                        arbiterCopyTables[index].Load(reader);
-		}
-	}catch(Exception  e){
-                    ArbiterCopyUtilLibrary.writeToLog("Error reading data for table with  index " + index + " from SQLite. Message : " + e.Message);
-                    Console.WriteLine("Error reading data for table with " + index + " from SQLite. Message : " + e.Message);
-                    ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
-                    ArbiterCopyUtilLibrary.writeToLog(e.ToString());
-                    Console.WriteLine(e.StackTrace);
-                    Console.WriteLine(e.ToString());
-		
-	}
-
-	}else{
-	  Console.WriteLine("Could not find file "+dbFileName);
-                ArbiterCopyUtilLibrary.writeToLog("Could not find file "+dbFileName);
-	}
-			}
-
 	    public   void  runArbiterTransactionCopyFilter(string destinationServer,  string bulkQuery, int tabInd ){
 
 				Console.WriteLine("Table  index: "+tabInd.ToString());
 
-				string   targetConnectionString         = connectionStringMap[sourceServer];
+				string   targetConnectionString         = connectionStringMap[destinationServer];
 			 	arbiterCopyFilterTables[tabInd]         = new DataTable();
-				string  tableName                       = ArbiterCopyUtilLibrary.arbiterCopyFilterTablePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType+"_"+tabInd.ToString();
+				string  tableName                       = ArbiterCopyUtilLibrary.arbiterCopyFilterTablePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType.ToLower()+"_"+tabInd.ToString();
+				copyFilterTableNameMap.Add(tabInd,tableName);
 				try{
                 lock (locker)
                 {	Console.WriteLine("Running fetch script for table: "+tabInd.ToString());
@@ -956,8 +887,10 @@ namespace ArbiterCopyService{
 							ArbiterCopyUtilLibrary.writeToLog("Running fetch script for table: " + tabInd.ToString()+"\n"+bulkQuery);
 					}
 				}
-
-                bulkCopyDataFromRemoteServer(bulkQuery, tableName);
+				
+				copyFilterStartTimeMap.Add(tabInd,DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));          
+                bulkCopyDataWithinServer(bulkQuery, tableName, destServerConnectionString, true);
+				copyFilterEndTimeMap.Add(tabInd,DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
 
 			 }catch(Exception e){
 						Console.WriteLine("Error while running bulk insert for table index: "+tabInd+" and name: "+arbiterCopyFilterTables[tabInd].ToString()+". Error: " + e.Message);
@@ -1032,52 +965,13 @@ namespace ArbiterCopyService{
             }
         }
 
-public   void  exportDataToDestinationTable( int tabInd ){
-
-				Console.WriteLine("Table  index: "+tabInd.ToString());
-
-				string   targetConnectionString      = connectionStringMap["target"];
-				string   stagingTableName            = ArbiterCopyUtilLibrary.arbiterCopyTableNamePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType+"_"+tabInd.ToString();
-				string   filterTableName             = ArbiterCopyUtilLibrary.arbiterCopyFilterTablePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType+"_"+tabInd.ToString();
-				
-				string  stagingTableIndex     		 = "CREATE INDEX [ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  ON ["+stagingTableName+"] (["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]);";
-				string  filterTableIndex    		 = "CREATE INDEX [ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  ON ["+filterTableName+"] (["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]);";
-				
-				executeScript(stagingTableIndex+stagingTableIndex, connectionStringMap["destination"]);
-				
-				string  bulkInsertScript             = "SELECT  * FROM  ["+stagingTableName+"] WITH (NOLOCK, INDEX=ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+")  WHERE  ["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"] NOT IN (SELECT ["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  FROM  ["+filterTableName+"]   WITH (NOLOCK, INDEX=ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"))";
-			  try{
-                lock (locker)
-                {	Console.WriteLine("Running fetch script for table: "+tabInd.ToString());
-
-					if( ArbiterCopyUtilLibrary.fs.BaseStream != null){
-							ArbiterCopyUtilLibrary.writeToLog("Running insert script for table: " + stagingTableName+"\n"+bulkQuery);
-					}
-				}
-                bulkCopyDataToDestinationServer(bulkInsertScript, ArbiterCopyUtilLibrary.destinationTable, connectionStringMap["destination"]);
-                
-			}catch(Exception e){
-
-						
-					
-								Console.WriteLine("Error while running bulk insert for table index: "+tabInd+" and name: "+arbiterCopyTables[tabInd].ToString()+". Error: " + e.Message);
-								Console.WriteLine(e.StackTrace);
-								ArbiterCopyUtilLibrary.writeToLog("Error while running bulk insert script "+bulkQuery+": " + e.Message);
-								ArbiterCopyUtilLibrary.writeToLog(e.ToString());
-								ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
-								Console.WriteLine(e.ToString());
-								emailError.AppendLine("<div style=\"color:red\">Error while running bulk insert script "+bulkQuery+": " + e.Message);
-								emailError.AppendLine("<div style=\"color:red\">"+e.StackTrace);
-					
-						}
-				}
-		        public static void bulkCopyDataToDestinationServer( string copyScript, string destTable, string connectionStr)
+ public static void bulkCopyDataWithinServer( string copyScript, string destTable, string connectionString, bool createTable)
         {
-
-    
+             DataTable schmTable   =getColumns(copyScript,connectionString);
+            if(createTable) createSQLTableFromDataTable(destTable, schmTable, connectionString);
            try
             {
-                using (SqlConnection serverConnection = new SqlConnection(connectionStr))
+                using (SqlConnection serverConnection = new SqlConnection(connectionString))
                 {
                    
                     SqlCommand cmd = new SqlCommand(copyScript , serverConnection);
@@ -1092,9 +986,9 @@ public   void  exportDataToDestinationTable( int tabInd ){
                         serverConnection.Open();
                     }
                     SqlDataReader reader = cmd.ExecuteReader();
-                    using (SqlConnection bulkCopyConnection = new SqlConnection(connectionStr))
+                    using (SqlConnection bulkCopyConnection = new SqlConnection(destServerConnectionString))
                     {
-                        using (SqlBulkCopy bulkCopy = new SqlBulkCopy(bulkCopyConnection, SqlBulkCopyOptions.UseInternalTransaction, null))
+                        using (SqlBulkCopy bulkCopy = new SqlBulkCopy(bulkCopyConnection, SqlBulkCopyOptions.TableLock | SqlBulkCopyOptions.UseInternalTransaction, null))
                         {
                             bulkCopyConnection.Open();
                             bulkCopy.BulkCopyTimeout	  = 0;
@@ -1117,7 +1011,149 @@ public   void  exportDataToDestinationTable( int tabInd ){
 								ArbiterCopyUtilLibrary.writeToLog("The data fetch session would now be restarted");
 								ArbiterCopyUtilLibrary.writeToLog(e.ToString());
 								Console.WriteLine(e.ToString());
-								bulkCopyDataToDestinationServer( copyScript,  destTable,connectionStr); 
+								bulkCopyDataWithinServer( copyScript, destTable,connectionString,createTable); 
+								emailError.AppendLine("<div style=\"color:red\">Error while running fetch script: "+copyScript +". The error is: "+e.Message);
+								emailError.AppendLine("<div style=\"color:red\">(Restarted):"+e.StackTrace);
+					} else {
+
+							Console.WriteLine("Error running bulk copy: " + e.Message);
+							Console.WriteLine(e.StackTrace);
+							ArbiterCopyUtilLibrary.writeToLog("Error running bulk copy: " + e.Message);
+							ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
+
+					}
+               
+            }
+        }
+
+        public static DataTable getColumns(string sqlScript, string  connectionString)
+        {
+		   ArrayList columnList     =   new ArrayList();
+		   DataTable schemaTable =  new DataTable();
+           try{
+            sqlScript =sqlScript.Contains("#")? sqlScript:"SET FMTONLY ON \n" + sqlScript;
+             connectionString = connectionString.Replace("Network Library=DBMSSOCN", "Provider=SQLOLEDB");
+            using (OleDbDataAdapter oda = new OleDbDataAdapter(sqlScript, connectionString))
+            {
+                oda.SelectCommand.CommandTimeout = 0;
+                DataSet ds = new DataSet();
+                oda.Fill(ds);
+                schemaTable = ds.Tables[0];
+            }
+			  
+			 }catch (Exception e)
+            {
+
+                Console.WriteLine("Error getting  table schema from server with script:\n"+sqlScript +". \nError " + e.Message);
+                Console.WriteLine(e.StackTrace);
+                ArbiterCopyUtilLibrary.writeToLog("Error getting  table schema from server with script:\n" + sqlScript + ". \nError " + e.Message);
+                ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
+             
+
+
+            }
+
+            return schemaTable;
+        }
+     public static  void  exportDataToDestinationTable( int tabInd ){
+
+				Console.WriteLine("Table  index: "+tabInd.ToString());
+
+				string   targetConnectionString      = connectionStringMap["destination"];
+				string   stagingTableName            = ArbiterCopyUtilLibrary.arbiterCopyTableNamePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType.ToLower()+"_"+tabInd.ToString();
+				string   filterTableName             = ArbiterCopyUtilLibrary.arbiterCopyFilterTablePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType.ToLower()+"_"+tabInd.ToString();
+				
+				string  stagingTableIndex     		 = "CREATE INDEX [ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  ON ["+stagingTableName+"] (["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]);";
+				string  filterTableIndex    		 = "CREATE INDEX [ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  ON ["+filterTableName+"] (["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]);";
+				
+				
+				
+				executeScript(stagingTableIndex+filterTableIndex, connectionStringMap["destination"]);
+				
+				string  bulkInsertScript             = "SELECT  * FROM  ["+stagingTableName+"] WITH (NOLOCK, INDEX=ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+")  WHERE  ["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"] NOT IN (SELECT ["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  FROM  ["+filterTableName+"]   WITH (NOLOCK, INDEX=ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"))";
+			  try{
+				  
+
+                bulkCopyDataToDestinationServer(bulkInsertScript, ArbiterCopyUtilLibrary.destinationTable, connectionStringMap["destination"],tabInd);
+                
+			}catch(Exception e){
+
+						
+					
+								Console.WriteLine("Error while running bulk insert for table index: "+tabInd+" and name: "+arbiterCopyTables[tabInd].ToString()+". Error: " + e.Message);
+								Console.WriteLine(e.StackTrace);
+								ArbiterCopyUtilLibrary.writeToLog(e.ToString());
+								ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
+								Console.WriteLine(e.ToString());
+								emailError.AppendLine("<div style=\"color:red\">"+e.StackTrace);
+					
+						}
+				}
+		        public static void bulkCopyDataToDestinationServer( string copyScript, string destTable, string connectionStr, int tableIndex)
+        {
+
+                          int totalRecordCount    =  0;
+           try
+            {
+                using (SqlConnection serverConnection = new SqlConnection(connectionStr))
+                {
+                    
+					DataTable schmTable = getColumns(copyScript, connectionStr);
+					ArrayList columns   = new ArrayList();
+
+					foreach (DataColumn col in schmTable.Columns){
+				     columns.Add(col.ColumnName);
+					}
+
+                    SqlCommand cmd = new SqlCommand(copyScript , serverConnection);
+
+                    cmd = new SqlCommand(copyScript, serverConnection);
+                    Console.WriteLine("Executing script: " + copyScript);
+                    ArbiterCopyUtilLibrary.writeToLog("Executing script: " + copyScript);
+                    cmd.CommandTimeout = 0;
+                    if (serverConnection != null && serverConnection.State == ConnectionState.Closed)
+                    {
+
+                        serverConnection.Open();
+                    }
+                    SqlDataReader reader = cmd.ExecuteReader();
+                    using (SqlConnection bulkCopyConnection = new SqlConnection(connectionStr))
+                    {
+                        using (SqlBulkCopy bulkCopy = new SqlBulkCopy(bulkCopyConnection, SqlBulkCopyOptions.UseInternalTransaction, null))
+                        {
+
+                            bulkCopyConnection.Open();
+                            bulkCopy.BulkCopyTimeout	  = 0;
+							foreach(string  col in  columns){
+								bulkCopy.ColumnMappings.Add(col, col);
+							}
+                            bulkCopy.BatchSize 			  = ArbiterCopyUtilLibrary.batchSize;
+							bulkCopy.NotifyAfter = 1;
+						    bulkCopy.SqlRowsCopied += (sender, args) => {
+                                  ++totalRecordCount;
+							};   
+                            bulkCopy.DestinationTableName = destTable;
+                            bulkCopy.WriteToServer(reader);
+                        }
+
+						
+                    }
+                    reader.Close();
+                }
+				copyInsertedTransCountMap.Add(tableIndex,totalRecordCount);
+            }
+            catch (Exception e)
+            {
+
+					if(!e.Message.ToLower().Contains("filegroup")){
+								Console.WriteLine("Error while running fetch script: "+copyScript+". The error is: "+e.Message);
+								Console.WriteLine("The data fetch session would now be restarted");
+								ArbiterCopyUtilLibrary.writeToLog("Error while running fetch script: "+copyScript+". The error is: "+e.Message);
+								ArbiterCopyUtilLibrary.writeToLog("The data fetch session would now be restarted");
+								ArbiterCopyUtilLibrary.writeToLog(e.ToString());
+								Console.WriteLine(e.ToString());
+
+								bulkCopyDataToDestinationServer( copyScript,  destTable,connectionStr, tableIndex); 
 								emailError.AppendLine("<div style=\"color:red\">Error while running fetch script: "+copyScript +". The error is: "+e.Message);
 								emailError.AppendLine("<div style=\"color:red\">(Restarted):"+e.StackTrace);
 					} else {
@@ -1161,7 +1197,7 @@ public   void  exportDataToDestinationTable( int tabInd ){
         {
            try{
             sqlScript =sqlScript.Contains("#")? sqlScript:"SET FMTONLY ON \n" + sqlScript;
-            string targetConnectionString = sourceServerConnectionString.Replace("Network Library=DBMSSOCN", "Provider=SQLOLEDB");
+            string targetConnectionString = destServerConnectionString.Replace("Network Library=DBMSSOCN", "Provider=SQLOLEDB");
             using (OleDbDataAdapter oda = new OleDbDataAdapter(sqlScript, targetConnectionString))
             {
                 oda.SelectCommand.CommandTimeout = 0;
@@ -1182,19 +1218,121 @@ public   void  exportDataToDestinationTable( int tabInd ){
 
 
         }
-		public static void  createFinalView(int totalTables){
 
-		    StringBuilder  viewBuilder  = new StringBuilder();
-            executeScript("IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[" + ArbiterCopyUtilLibrary.reportTableName + "]') AND type in (N'V')) BEGIN  DROP VIEW [" + ArbiterCopyUtilLibrary.reportTableName + "] END ",destServerConnectionString);
-            viewBuilder.Append(" CREATE  VIEW [").Append(ArbiterCopyUtilLibrary.reportTableName).Append("]  AS ");
-			for (int i = 0; i < totalTables; i++ ){
-                viewBuilder.Append(" SELECT * FROM ").Append(ArbiterCopyUtilLibrary.temporaryTableName+"_"+i.ToString()).Append(" WITH (NOLOCK) UNION ALL ");
+public void sendMailNotification(Dictionary<string, DataTable> dTableMap){
+
+	            Console.WriteLine("Sending Notification... ");
+				ArbiterCopyUtilLibrary.writeToLog("Sending Notification... ");
+				emailBody.AppendLine("<div style=\"color:black\">Hi, All.</div>");
+				emailBody.AppendLine("<div style=\"color:black\">\n</div>");
+				emailBody.AppendLine("<div style=\"color:black\">Trust this meets you well</div>");
+				emailBody.AppendLine("<div style=\"color:black\">\n</div>");
+				emailBody.AppendLine("<div style=\"color:black\">Please see report for "+ArbiterCopyUtilLibrary.arbiterCopyType+" Copy Session below: </div>");
+                MailMessage message = new MailMessage();
+
+				foreach (var address in ArbiterCopyUtilLibrary.toAddress.Split(new [] {ArbiterCopyUtilLibrary.emailSeparator}, StringSplitOptions.RemoveEmptyEntries)){
+						if(!string.IsNullOrWhiteSpace(address)){
+									message.To.Add(address);   	
+						}
+				}
+				foreach (var address in ArbiterCopyUtilLibrary.ccAddress.Split(new [] {ArbiterCopyUtilLibrary.emailSeparator}, StringSplitOptions.RemoveEmptyEntries)){
+					if(!string.IsNullOrWhiteSpace(address)){
+					message.CC.Add(address);   	
+					}
+				}
+				foreach (var address in ArbiterCopyUtilLibrary.bccAddress.Split(new [] {ArbiterCopyUtilLibrary.emailSeparator}, StringSplitOptions.RemoveEmptyEntries)){
+							if(!string.IsNullOrWhiteSpace(address)){
+										message.Bcc.Add(address);   	
+							}
+				}
+				Console.WriteLine("Sending Notification... ");
+				message.From = new MailAddress(ArbiterCopyUtilLibrary.fromAddress);				
+				message.Subject = "Arbiter Transaction Copy Report for "+ArbiterCopyUtilLibrary.arbiterCopyType+" at  "+DateTime.Now.ToString("yyyy-MM-dd hh:mm:ss");
+				message.IsBodyHtml = true;
+		
+				emailBody.AppendLine("<style type=\"text/css\">");
+				emailBody.AppendLine("table.gridtable {");
+				emailBody.AppendLine("	font-family:"+ArbiterCopyUtilLibrary.emailFontFamily+";");
+				emailBody.AppendLine("	font-size:"+ArbiterCopyUtilLibrary.emailFontSize+";");
+				emailBody.AppendLine("	color:"+ArbiterCopyUtilLibrary.borderColour+";");
+				emailBody.AppendLine("	border-width:"+ArbiterCopyUtilLibrary.borderWidth+";");
+				emailBody.AppendLine("	border-color: "+ArbiterCopyUtilLibrary.borderColour+";");
+				emailBody.AppendLine("	border-collapse: collapse;");
+				emailBody.AppendLine("}");
+				emailBody.AppendLine("table.gridtable th {");
+				emailBody.AppendLine("	border-width: "+ArbiterCopyUtilLibrary.borderWidth+";");
+				emailBody.AppendLine("	padding: 8px;");
+				emailBody.AppendLine("	border-style: solid;");
+				emailBody.AppendLine("	border-color:"+ArbiterCopyUtilLibrary.borderColour+";");
+				emailBody.AppendLine("	background-color:"+ArbiterCopyUtilLibrary.headerBgColor+";");
+				emailBody.AppendLine("}");
+				emailBody.AppendLine("table.gridtable td {");
+				emailBody.AppendLine("	border-width: 1px;");
+				emailBody.AppendLine("	padding: 8px;");
+				emailBody.AppendLine("	border-style: solid;");
+				emailBody.AppendLine("	border-color: "+ArbiterCopyUtilLibrary.borderColour+";");
+				emailBody.AppendLine("}");
+				emailBody.AppendLine("</style>");
+				
+				
+
+				foreach(KeyValuePair<string, DataTable>  reportTabMap in reportTableMap){
+					 emailBody.AppendLine("<div>\n</div>");
+				
+				     emailBody.AppendLine("<div><hr/></div>");
+					 emailBody.AppendLine("<div justify=\"left\"><table class=\"gridtable\">");
+					 emailBody.AppendLine("<thead>");
+				     emailBody.AppendLine("<caption style=\"color:gray\" justify=\"left\">"+reportTabMap.Key+"</caption>");
+					 foreach (DataColumn col in reportTabMap.Value.Columns){
+					 	emailBody.AppendLine("<th>"+col.ColumnName+"</th>");
+					 }
+					 
+					emailBody.AppendLine("</thead>");
+					emailBody.AppendLine("<tbody>");
+					
+					int k = 0;
+			        foreach (DataRow row in reportTabMap.Value.Rows) {
+                      if(k%2!=0){
+								emailBody.AppendLine("<tr style=\"background-color:#ffffff\"> ");   // <td>"+row["INDEX_NO"]+"</td><td>"+row["PARAMETER"]+"</td><td>"+row["VALUE"]+"</td></tr>");
+					    } else{
+								emailBody.AppendLine("<tr style=\"background-color:"+ArbiterCopyUtilLibrary.alternateRowColour+"\">"); //<td>"+row["INDEX_NO"]+"</td><td>"+row["PARAMETER"]+"</td><td>"+row["VALUE"]+"</td></tr>");
+					  }
+					
+					  foreach(DataColumn dCol in  reportTabMap.Value.Columns){
+						  
+						 emailBody.AppendLine("<td>"+ row[dCol.ToString()].ToString()+"</td>");
+						   
+					  }
+					  emailBody.AppendLine("</tr>");
+				      ++k;
+			        }
+					 emailBody.AppendLine("</tbody>");
+			 emailBody.AppendLine("</table></div>");
+				 }
+			    
+ 		   emailBody.AppendLine("<div><hr/></div>");
+			if(!string.IsNullOrWhiteSpace(emailError.ToString())){
+				emailBody.AppendLine("<div><strong> Error List </strong></div>");
+				emailBody.AppendLine("<div>\n</div>");
+				emailBody.AppendLine("<div>\n</div>");
+				emailBody.AppendLine(emailError.ToString());
 			}
-            viewBuilder.Length= viewBuilder.Length -11;
-            viewBuilder.Append(";");
-            executeScript(viewBuilder.ToString(), destServerConnectionString);
+			emailBody.AppendLine("<div>\n</div>");
+				emailBody.AppendLine("<div>\n</div>");
+			emailBody.AppendLine("Thank you.");
+			
+	        message.Body = emailBody.ToString();
+			SmtpClient smtpClient = new SmtpClient();
+			smtpClient.UseDefaultCredentials = true;
+
+			smtpClient.Host = ArbiterCopyUtilLibrary.smtpServer;
+			smtpClient.Port = Int32.Parse(ArbiterCopyUtilLibrary.smtpPort.ToString());
+			smtpClient.EnableSsl = ArbiterCopyUtilLibrary.isSSLEnabled;
+			smtpClient.Credentials = new System.Net.NetworkCredential(ArbiterCopyUtilLibrary.sender, ArbiterCopyUtilLibrary.senderPassword);
+			smtpClient.Send(message);
 
 		}
+
         public static void Main (string[] args){
 				
 				 string configFile 		= ""; 

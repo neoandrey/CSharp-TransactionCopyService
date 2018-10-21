@@ -17,12 +17,12 @@ namespace ArbiterCopyService
             public string    destination_database                 { set; get;} 
             public int       destination_port                     { set; get;} 
             public string    destination_table                    {set; get;}
-            public string    batch_size                           { set; get;} 
+            public int        batch_size                           { set; get;} 
             public string    arbiter_copy_table_name_prefix        { set; get;} 
             public string    arbiter_copy_filter_table_prefix     { set; get;} 
             public string    arbiter_copy_type                    { set; get;} 
-            public string    arbiter_copy_mode                     { set; get;} 
-            public string    arbiter_copy_specific_parameter_values  {set; get;}      
+            public int    arbiter_copy_mode                     { set; get;} 
+            public ArrayList    arbiter_copy_specific_parameter_values  {set; get;}      
             public  string   copy_start_parameter {set; get;}
 
             public string    copy_end_parameter {set; get;}
@@ -47,10 +47,14 @@ namespace ArbiterCopyService
             public string    email_font_family                  { set; get;} 
             public string    email_font_size                  	{ set; get;} 
             public string    color                 			{ set; get;} 
-            public string    border_color                   		{ set; get;}            
+            public string    border_color                   		{ set; get;}  
+
+            public string    border_width                   		{ set; get;}          
              public bool     send_email_notification              { set; get;}     
             public int       wait_interval                      { set; get;}
             public  int      num_of_previous_days_from_start         {set; get;}
             public  string   arbiter_copy_filter_field               {set; get;}
+            public  string   email_separator                         {set; get;}
+            public  string   header_background_color                 {set; get;}
     }
 }

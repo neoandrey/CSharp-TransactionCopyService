@@ -26,15 +26,15 @@ namespace ArbiterCopyService{
                 public static  int                          destinationPort                 	 =     0;
                public  static  string                       destinationTable                     =     "";
                 public  static System.IO.StreamWriter 	    fs;
-                public  static string 					    logFile								 = Directory.GetCurrentDirectory()+"\\log\\report_generator_"+DateTime.Now.ToString("yyyyMMdd_HH_mm_ss")+".log";
-                public  static string 					    configFileName                       = Directory.GetCurrentDirectory()+"\\conf\\report_generator_config.json";
+                public  static string 					    logFile								 = Directory.GetCurrentDirectory()+"\\log\\arbiter_copy_log_for_"+DateTime.Now.ToString("yyyyMMdd_HH_mm_ss")+".log";
+                public  static string 					    configFileName                       = Directory.GetCurrentDirectory()+"\\conf\\arbiter_copy_config.json";
                 public  static int  					    batchSize       				     = 100;
 
                 public  static string                       arbiterCopyTableNamePrefix           = "";
 
                 public static  string                       arbiterCopyFilterTablePrefix         = "";
 
-                public static  string                       arbiterCopyType                      = "";
+                public static  string                       arbiterCopyType                      =  "";
   
                 public static  int                          arbiterCopyMode                      = 0;
 
@@ -85,7 +85,14 @@ namespace ArbiterCopyService{
 
                 public static  string                       arbiterCopyFilterField              = "";
 
+                public static string                        emailSeparator                        = "";
+                
+                public static string                        borderWidth                          =  "";
+
+                public static string                        headerBgColor                        =   "";
+
                  public   ArbiterCopyUtilLibrary(){
+
                         initArbiterCopyUtilLibrary();
 
                 }
@@ -120,7 +127,9 @@ namespace ArbiterCopyService{
 				}
                 public  void  initArbiterCopyUtilLibrary(){
 
-					if (!File.Exists(logFile))  {
+					readConfigFile(configFileName);
+
+                    if (!File.Exists(logFile))  {
                         
 							fs = File.CreateText(logFile);
 					
@@ -129,8 +138,10 @@ namespace ArbiterCopyService{
                     		fs = File.AppendText(logFile);
 					
                     } 
+                    
 					log("===========================Started Report Generator Session at "+DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")+"==============================");
-					readConfigFile(configFileName);
+					   writeToLog("Configurations have been successfully initialised.");
+                    
 
                     Console.WriteLine("sourceServer: "+sourceServer);
                     Console.WriteLine("sourceDatabase: "+sourceDatabase);
@@ -157,7 +168,7 @@ namespace ArbiterCopyService{
                     }                   
                 }
 				public  static  void readConfigFile(string configFileName){					
-				    writeToLog("Reading configurations from "+configFileName+"  ...");
+				   // writeToLog("Reading configurations from "+configFileName+"  ...");
                     Console.WriteLine("Reading configurations from "+configFileName+"  ...");
                     try{
 
@@ -170,9 +181,11 @@ namespace ArbiterCopyService{
                         destinationDatabase       	      = arbiterConfig.destination_database;
                         destinationPort           	      = arbiterConfig.destination_port;
                         batchSize       		          = arbiterConfig.batch_size;
+                        destinationTable                  = arbiterConfig.destination_table;
                         arbiterCopyTableNamePrefix        = arbiterConfig.arbiter_copy_table_name_prefix;
                         arbiterCopyFilterTablePrefix      = arbiterConfig.arbiter_copy_filter_table_prefix;
                         arbiterCopyType                   = arbiterConfig.arbiter_copy_type;
+                        logFile						      = Directory.GetCurrentDirectory()+"\\log\\arbiter_copy_log_for_"+arbiterCopyType.ToLower()+"_"+DateTime.Now.ToString("yyyyMMdd_HH_mm_ss")+".log";
                         arbiterCopyMode                   = arbiterConfig.arbiter_copy_mode;
                         arbiterCopySpecificParamterValues = arbiterConfig.arbiter_copy_specific_parameter_values;
                         copyStartParameter                = arbiterConfig.copy_start_parameter;
@@ -193,16 +206,21 @@ namespace ArbiterCopyService{
                         alternateRowColour                = arbiterConfig.alternate_row_colour;
                         emailFontFamily                   = arbiterConfig.email_font_family;
                         emailFontSize                     = arbiterConfig.email_font_size;
-                        colour                            = arbiterConfig.colour;
-                        borderColour                      = arbiterConfig.border_colour;
+                        colour                            = arbiterConfig.color;
+                        borderColour                      = arbiterConfig.border_color;
                         sendEmailNotification             = arbiterConfig.send_email_notification; 
                         WAIT_INTERVAL                     = arbiterConfig.wait_interval;
                         arbiterCopyFilterField            = arbiterConfig.arbiter_copy_filter_field;
+                        numOfDaysFromStart                = arbiterConfig.num_of_previous_days_from_start;
+                        emailSeparator                    = arbiterConfig.email_separator;
+                        borderWidth                       = arbiterConfig.border_width;
+                        headerBgColor                     = arbiterConfig.header_background_color;
+
 
                         Console.WriteLine("sourceServer: "+sourceServer);
                         Console.WriteLine("sourceDatabase: "+sourceDatabase);
 						Console.WriteLine("Configurations have been successfully initialised.");
-                        writeToLog("Configurations have been successfully initialised.");
+                     
 
                 }catch(Exception e){
 
