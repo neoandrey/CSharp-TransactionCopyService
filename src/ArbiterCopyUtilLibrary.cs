@@ -78,6 +78,8 @@ namespace ArbiterCopyService{
 		        public  static ConnectionProperty 		    sourceConnectionProps;
                 public  static ConnectionProperty 		    destinationConnectionProps;
 
+                public  static ConnectionProperty 		    stagingConnectionProps;
+
                 public static  string                       arbiterFilterCopyScript             =   "";
   
                 public   static   int                       numOfDaysFromStart                  =         0          ;
@@ -90,6 +92,14 @@ namespace ArbiterCopyService{
                 public static string                        borderWidth                          =  "";
 
                 public static string                        headerBgColor                        =   "";
+
+                public static  bool                         cleanUpAfterCopy                     =  false;
+
+                public static  string                       stagingServer                        =  "";
+
+                public static  string                       stagingDatabase                      = "";
+
+                public static  int                          stagingPort                          =  1433;
 
                  public   ArbiterCopyUtilLibrary(){
 
@@ -165,7 +175,18 @@ namespace ArbiterCopyService{
                         Console.WriteLine("Source connection details are not complete");
                         writeToLog("Destination connection details are not complete");
 
-                    }                   
+                    }   
+
+                    if (!String.IsNullOrEmpty(stagingServer) &&  !String.IsNullOrEmpty(stagingDatabase)){
+    
+                        stagingConnectionProps  = new ConnectionProperty( stagingServer, stagingDatabase );
+
+                    } else {
+
+                        Console.WriteLine("Staging connection details are not complete");
+                        writeToLog("Staging connection details are not complete");
+
+                    }                 
                 }
 				public  static  void readConfigFile(string configFileName){					
 				   // writeToLog("Reading configurations from "+configFileName+"  ...");
@@ -215,12 +236,12 @@ namespace ArbiterCopyService{
                         emailSeparator                    = arbiterConfig.email_separator;
                         borderWidth                       = arbiterConfig.border_width;
                         headerBgColor                     = arbiterConfig.header_background_color;
+                        cleanUpAfterCopy                  = arbiterConfig.clean_up_after_copy;
+                        stagingServer                     = arbiterConfig.staging_server;
+                        stagingDatabase                   = arbiterConfig.staging_database;
+                        stagingPort                       = arbiterConfig.staging_port;
 
-
-                        Console.WriteLine("sourceServer: "+sourceServer);
-                        Console.WriteLine("sourceDatabase: "+sourceDatabase);
-						Console.WriteLine("Configurations have been successfully initialised.");
-                     
+						Console.WriteLine("Configurations have been successfully initialised.");                  
 
                 }catch(Exception e){
 

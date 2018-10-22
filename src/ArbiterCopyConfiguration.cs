@@ -1,14 +1,14 @@
 
-using  System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Text;
+            using  System;
+            using System.Collections;
+            using System.Collections.Generic;
+            using System.Text;
 
-namespace ArbiterCopyService
-{
+            namespace ArbiterCopyService
+            {
 
-    public class ArbiterCopyConfiguration
-    {
+            public class ArbiterCopyConfiguration
+            {
 
             public string    source_server                   	   { set; get;} 
             public string    source_database                       { set; get;} 
@@ -16,6 +16,11 @@ namespace ArbiterCopyService
             public string    destination_server                   { set; get;} 
             public string    destination_database                 { set; get;} 
             public int       destination_port                     { set; get;} 
+
+            public string     staging_server                   { set; get;} 
+            public string     staging_database                 { set; get;} 
+            public int        staging_port                     { set; get;} 
+
             public string    destination_table                    {set; get;}
             public int        batch_size                           { set; get;} 
             public string    arbiter_copy_table_name_prefix        { set; get;} 
@@ -33,7 +38,7 @@ namespace ArbiterCopyService
 
             public string    arbiter_copy_filter_script {set; get;}
 
-             public string   copy_script {set; get;}
+            public string   copy_script {set; get;}
             public string    to_address                   		{ set; get;} 
             public string    from_address                  		{ set; get;} 
             public string    bcc_address                  		{ set; get;} 
@@ -50,11 +55,12 @@ namespace ArbiterCopyService
             public string    border_color                   		{ set; get;}  
 
             public string    border_width                   		{ set; get;}          
-             public bool     send_email_notification              { set; get;}     
+            public bool     send_email_notification              { set; get;}     
             public int       wait_interval                      { set; get;}
             public  int      num_of_previous_days_from_start         {set; get;}
             public  string   arbiter_copy_filter_field               {set; get;}
             public  string   email_separator                         {set; get;}
             public  string   header_background_color                 {set; get;}
-    }
-}
+            public  bool     clean_up_after_copy                     {set; get;}
+            }
+            }
