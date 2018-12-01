@@ -15,8 +15,8 @@ using System.Globalization;
 using System.Net.Mail;
 using Newtonsoft.Json.Linq;
 
-namespace ArbiterCopyService{
-       public class   ArbiterCopyUtilLibrary{
+namespace TranCopyService{
+       public class   TranCopyUtilLibrary{
 
                 public  static string 					    sourceServer        				 = "";
                 public  static string 					    sourceDatabase       				 =    "";
@@ -26,19 +26,19 @@ namespace ArbiterCopyService{
                 public static  int                          destinationPort                 	 =     0;
                public  static  string                       destinationTable                     =     "";
                 public  static System.IO.StreamWriter 	    fs;
-                public  static string 					    logFile								 = Directory.GetCurrentDirectory()+"\\log\\arbiter_copy_log_for_"+DateTime.Now.ToString("yyyyMMdd_HH_mm_ss")+".log";
-                public  static string 					    configFileName                       = Directory.GetCurrentDirectory()+"\\conf\\arbiter_copy_config.json";
+                public  static string 					    logFile								 = Directory.GetCurrentDirectory()+"\\log\\copy_log_for_"+DateTime.Now.ToString("yyyyMMdd_HH_mm_ss")+".log";
+                public  static string 					    configFileName                       = Directory.GetCurrentDirectory()+"\\conf\\copy_config.json";
                 public  static int  					    batchSize       				     = 100;
 
-                public  static string                       arbiterCopyTableNamePrefix           = "";
+                public  static string                       tranCopyTableNamePrefix           = "";
 
-                public static  string                       arbiterCopyFilterTablePrefix         = "";
+                public static  string                       tranCopyFilterTablePrefix         = "";
 
-                public static  string                       arbiterCopyType                      =  "";
+                public static  string                       tranCopyType                      =  "";
   
-                public static  int                          arbiterCopyMode                      = 0;
+                public static  int                          tranCopyMode                      = 0;
 
-                public static ArrayList                     arbiterCopySpecificParamterValues    =  new ArrayList();
+                public static ArrayList                     tranCopySpecificParamterValues    =  new ArrayList();
 
                 public static string                        copyStartParameter                   =  "";
 
@@ -48,19 +48,19 @@ namespace ArbiterCopyService{
 
                 public static string                        copyEndParameterValue                =  "";
             
-                public static string                        arbiterCopyFilterScript              =  "";
+                public static string                        tranCopyFilterScript              =  "";
 
                 public static string                        copyScript                           =    "";
 
                 public  static string 				        toAddress                            = "";
 
-                 public  static string 				        fromAddress   	    				 = "ArbiterCopy@interswitchgroup.com";
+                 public  static string 				        fromAddress   	    				 = "TranCopy@interswitchgroup.com";
                 public  static string 					    bccAddress    	   					 = "";
      
                 public  static string 					    ccAddress     	   				     = "";
                 public  static string 					    smtpServer    						 = "172.16.10.223";
                 public  static int 					        smtpPort     	    			     = 25;
-                public  static string 					    sender             					 = "ArbiterCopy@interswitchgroup.com";
+                public  static string 					    sender             					 = "TranCopy@interswitchgroup.com";
                 public  static string 					    senderPassword 	   					 = "";
                 public  static bool 					    isSSLEnabled  					     = false;
                 public  static string                       alternateRowColour                   = "#cce0ff";
@@ -71,7 +71,7 @@ namespace ArbiterCopyService{
                 public  static bool                         attachReportToMail                   =  false;
                 public  static bool                         embedReportInMail                    =  false;
                 public  static bool                         sendEmailNotification                =  false;
-                public  static ArbiterCopyConfiguration     arbiterConfig                          =  new ArbiterCopyConfiguration();
+                public  static TranCopyConfiguration     tranConfig                          =  new TranCopyConfiguration();
                 public static  int                          WAIT_INTERVAL                        =   1000;
                 public static String                        temporaryTableName                   =   "temp_report_table";
                 public  static int                          concurrentThreads                    =  1;
@@ -80,12 +80,12 @@ namespace ArbiterCopyService{
 
                 public  static ConnectionProperty 		    stagingConnectionProps;
 
-                public static  string                       arbiterFilterCopyScript             =   "";
+                public static  string                       tranFilterCopyScript             =   "";
   
                 public   static   int                       numOfDaysFromStart                  =         0          ;
                 public static readonly object               locker                              = new object();  
 
-                public static  string                       arbiterCopyFilterField              = "";
+                public static  string                       tranCopyFilterField              = "";
 
                 public static string                        emailSeparator                        = "";
                 
@@ -101,12 +101,26 @@ namespace ArbiterCopyService{
 
                 public static  int                          stagingPort                          =  1433;
 
-                 public   ArbiterCopyUtilLibrary(){
+                public static  ArrayList                    destinationTableColumnOrder           =  new ArrayList();
 
-                        initArbiterCopyUtilLibrary();
+                public  static   bool                       sendMailOnError                       = true;
+
+                public  static  string                      finalSelectFields                     = "";
+
+                public static   string                      filteredStagingTablePrefix            = "";
+
+                public static  string                       tableMergeScript                      = "";
+
+                public static  bool                         showParameterTable                    = true;            
+
+                public static  string                       emailSubject                          = "";
+ 
+                 public   TranCopyUtilLibrary(){
+
+                        initTranCopyUtilLibrary();
 
                 }
-      			public   ArbiterCopyUtilLibrary(string  cfgFile){
+      			public   TranCopyUtilLibrary(string  cfgFile){
 					
 					   if(!string.IsNullOrEmpty(cfgFile) ){
 
@@ -120,7 +134,7 @@ namespace ArbiterCopyService{
 							   if(File.Exists(nuCfgFile)){
 
 								configFileName     = nuCfgFile;
-								initArbiterCopyUtilLibrary();
+								initTranCopyUtilLibrary();
 
 							   }
 						   }catch(Exception e){
@@ -135,7 +149,7 @@ namespace ArbiterCopyService{
 				 	
 		       	         		
 				}
-                public  void  initArbiterCopyUtilLibrary(){
+                public  void  initTranCopyUtilLibrary(){
 
 					readConfigFile(configFileName);
 
@@ -149,7 +163,7 @@ namespace ArbiterCopyService{
 					
                     } 
                     
-					log("===========================Started Report Generator Session at "+DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")+"==============================");
+					log("===========================Started Tran Copy for "+tranCopyType+" Session at "+DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")+"==============================");
 					   writeToLog("Configurations have been successfully initialised.");
                     
 
@@ -194,52 +208,59 @@ namespace ArbiterCopyService{
                     try{
 
 					    string  propertyString            = File.ReadAllText(configFileName);
-                        arbiterConfig                     = Newtonsoft.Json.JsonConvert.DeserializeObject<ArbiterCopyConfiguration>(propertyString);  
-                        sourceServer 			          = arbiterConfig.source_server;       	
-                        sourceDatabase       		      = arbiterConfig.source_database;
-                        sourcePort           		      = arbiterConfig.source_port;
-                        destinationServer 			      = arbiterConfig.destination_server;       	
-                        destinationDatabase       	      = arbiterConfig.destination_database;
-                        destinationPort           	      = arbiterConfig.destination_port;
-                        batchSize       		          = arbiterConfig.batch_size;
-                        destinationTable                  = arbiterConfig.destination_table;
-                        arbiterCopyTableNamePrefix        = arbiterConfig.arbiter_copy_table_name_prefix;
-                        arbiterCopyFilterTablePrefix      = arbiterConfig.arbiter_copy_filter_table_prefix;
-                        arbiterCopyType                   = arbiterConfig.arbiter_copy_type;
-                        logFile						      = Directory.GetCurrentDirectory()+"\\log\\arbiter_copy_log_for_"+arbiterCopyType.ToLower()+"_"+DateTime.Now.ToString("yyyyMMdd_HH_mm_ss")+".log";
-                        arbiterCopyMode                   = arbiterConfig.arbiter_copy_mode;
-                        arbiterCopySpecificParamterValues = arbiterConfig.arbiter_copy_specific_parameter_values;
-                        copyStartParameter                = arbiterConfig.copy_start_parameter;
-                        copyEndParameter                  = arbiterConfig.copy_end_parameter;
-                        copyStartParameterValue           = arbiterConfig.copy_start_parameter_value;
-                        copyEndParameterValue             = arbiterConfig.copy_end_parameter_value;
-                        arbiterFilterCopyScript           = arbiterConfig.arbiter_copy_filter_script;
-                        copyScript                        = arbiterConfig.copy_script;
-                        toAddress                         = arbiterConfig.to_address;
-                        fromAddress   	    	          = arbiterConfig.from_address;
-                        bccAddress    	   	              = arbiterConfig.bcc_address;              
-                        ccAddress     	   	              = arbiterConfig.cc_address;
-                        smtpServer    		              = arbiterConfig.smtp_server;
-                        smtpPort     	    		      = arbiterConfig.smtp_port;
-                        sender             		          = arbiterConfig.sender;
-                        senderPassword 	   	              = arbiterConfig.sender_password;
-                        isSSLEnabled  		              = arbiterConfig.is_ssl_enabled;                     
-                        alternateRowColour                = arbiterConfig.alternate_row_colour;
-                        emailFontFamily                   = arbiterConfig.email_font_family;
-                        emailFontSize                     = arbiterConfig.email_font_size;
-                        colour                            = arbiterConfig.color;
-                        borderColour                      = arbiterConfig.border_color;
-                        sendEmailNotification             = arbiterConfig.send_email_notification; 
-                        WAIT_INTERVAL                     = arbiterConfig.wait_interval;
-                        arbiterCopyFilterField            = arbiterConfig.arbiter_copy_filter_field;
-                        numOfDaysFromStart                = arbiterConfig.num_of_previous_days_from_start;
-                        emailSeparator                    = arbiterConfig.email_separator;
-                        borderWidth                       = arbiterConfig.border_width;
-                        headerBgColor                     = arbiterConfig.header_background_color;
-                        cleanUpAfterCopy                  = arbiterConfig.clean_up_after_copy;
-                        stagingServer                     = arbiterConfig.staging_server;
-                        stagingDatabase                   = arbiterConfig.staging_database;
-                        stagingPort                       = arbiterConfig.staging_port;
+                        tranConfig                     = Newtonsoft.Json.JsonConvert.DeserializeObject<TranCopyConfiguration>(propertyString);  
+                        sourceServer 			          = tranConfig.source_server;       	
+                        sourceDatabase       		      = tranConfig.source_database;
+                        sourcePort           		      = tranConfig.source_port;
+                        destinationServer 			      = tranConfig.destination_server;       	
+                        destinationDatabase       	      = tranConfig.destination_database;
+                        destinationPort           	      = tranConfig.destination_port;
+                        batchSize       		          = tranConfig.batch_size;
+                        destinationTable                  = tranConfig.destination_table;
+                        tranCopyTableNamePrefix        = tranConfig.copy_table_name_prefix;
+                        tranCopyFilterTablePrefix      = tranConfig.copy_filter_table_prefix;
+                        tranCopyType                   = tranConfig.copy_type;
+                        logFile						      = Directory.GetCurrentDirectory()+"\\log\\copy_log_for_"+tranCopyType.ToLower()+"_"+DateTime.Now.ToString("yyyyMMdd_HH_mm_ss")+".log";
+                        tranCopyMode                   = tranConfig.copy_mode;
+                        tranCopySpecificParamterValues = tranConfig.copy_specific_parameter_values;
+                        copyStartParameter                = tranConfig.copy_start_parameter;
+                        copyEndParameter                  = tranConfig.copy_end_parameter;
+                        copyStartParameterValue           = tranConfig.copy_start_parameter_value;
+                        copyEndParameterValue             = tranConfig.copy_end_parameter_value;
+                        tranFilterCopyScript           = tranConfig.copy_filter_script;
+                        copyScript                        = tranConfig.copy_script;
+                        toAddress                         = tranConfig.to_address;
+                        fromAddress   	    	          = tranConfig.from_address;
+                        bccAddress    	   	              = tranConfig.bcc_address;              
+                        ccAddress     	   	              = tranConfig.cc_address;
+                        smtpServer    		              = tranConfig.smtp_server;
+                        smtpPort     	    		      = tranConfig.smtp_port;
+                        sender             		          = tranConfig.sender;
+                        senderPassword 	   	              = tranConfig.sender_password;
+                        isSSLEnabled  		              = tranConfig.is_ssl_enabled;                     
+                        alternateRowColour                = tranConfig.alternate_row_colour;
+                        emailFontFamily                   = tranConfig.email_font_family;
+                        emailFontSize                     = tranConfig.email_font_size;
+                        colour                            = tranConfig.color;
+                        borderColour                      = tranConfig.border_color;
+                        sendEmailNotification             = tranConfig.send_email_notification; 
+                        WAIT_INTERVAL                     = tranConfig.wait_interval;
+                        tranCopyFilterField            = tranConfig.copy_filter_field;
+                        numOfDaysFromStart                = tranConfig.num_of_previous_days_from_start;
+                        emailSeparator                    = tranConfig.email_separator;
+                        borderWidth                       = tranConfig.border_width;
+                        headerBgColor                     = tranConfig.header_background_color;
+                        cleanUpAfterCopy                  = tranConfig.clean_up_after_copy;
+                        stagingServer                     = tranConfig.staging_server;
+                        stagingDatabase                   = tranConfig.staging_database;
+                        stagingPort                       = tranConfig.staging_port;
+                        destinationTableColumnOrder       = tranConfig.destination_table_column_order;
+                        sendMailOnError                   = tranConfig.send_mail_on_error;    
+                        finalSelectFields                 = tranConfig.final_select_fields; 
+                        filteredStagingTablePrefix        = tranConfig.filtered_staging_table_prefix;
+                        tableMergeScript                  = tranConfig.table_merge_script;  
+                        showParameterTable                = tranConfig.show_parameters_in_mail; 
+                        emailSubject                      = tranConfig.email_subject; 
 
 						Console.WriteLine("Configurations have been successfully initialised.");                  
 

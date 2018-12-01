@@ -1,0 +1,38 @@
+===========================Started Report Generator Session at 2018-10-22 22:34:19==============================
+2018-10-22 22:34:19=>Configurations have been successfully initialised.
+2018-10-22 22:34:19=>Staging connection details are not complete
+2018-10-22 22:34:19=>source_server: localhost
+2018-10-22 22:34:19=>source_database: postilion_office
+2018-10-22 22:34:19=>source_port: 1433
+2018-10-22 22:34:19=>destination_server: localhost
+2018-10-22 22:34:19=>destination_database: postilion_office
+2018-10-22 22:34:19=>destination_port: 1433
+2018-10-22 22:34:19=>staging_port: 0
+2018-10-22 22:34:19=>destination_table: NULL
+2018-10-22 22:34:19=>batch_size: 100
+2018-10-22 22:34:19=>arbiter_copy_table_name_prefix: arb_copy_temp
+2018-10-22 22:34:19=>arbiter_copy_filter_table_prefix: arbiter_filter
+2018-10-22 22:34:19=>arbiter_copy_type: Withdrawals
+2018-10-22 22:34:19=>arbiter_copy_mode: 0
+2018-10-22 22:34:19=>copy_start_parameter: @StartDate
+2018-10-22 22:34:19=>copy_end_parameter: @EndDate
+2018-10-22 22:34:19=>copy_start_parameter_value: 20180901
+2018-10-22 22:34:19=>copy_end_parameter_value: 20180921
+2018-10-22 22:34:19=>arbiter_copy_filter_script: SELECT  tran_nr FROM ARBITER_DESTINATION_TABLE WITH  (NOLOCK) WHERE CONVERT(DATE, datetime_req) ='@StartDate'
+2018-10-22 22:34:19=>copy_script: sql\report1.sql
+2018-10-22 22:34:19=>to_address: Mobolaji.Aina@interswitchgroup.com
+2018-10-22 22:34:19=>from_address: OptimizedReporter@interswitchgroup.com
+2018-10-22 22:34:19=>bcc_address: 1
+2018-10-22 22:34:19=>cc_address: temitolani.seidu@interswitchgroup.com
+2018-10-22 22:34:19=>smtp_server: 172.16.10.223
+2018-10-22 22:34:19=>smtp_port: 25
+2018-10-22 22:34:19=>sender: OptimizedReporter@interswitchgroup.com
+2018-10-22 22:34:19=>sender_password: NULL
+2018-10-22 22:34:19=>is_ssl_enabled: False
+2018-10-22 22:34:19=>alternate_row_colour: #cce0ff
+2018-10-22 22:34:19=>email_font_family: arial,times new roman,verdana,sans-serif;
+2018-10-22 22:34:19=>email_font_size: 11px
+2018-10-22 22:34:19=>color: #333333;
+2018-10-22 22:34:19=>border_color: blue
+2018-10-22 22:34:19=>send_email_notification: False
+2018-10-22 2

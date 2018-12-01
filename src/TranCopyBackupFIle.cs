@@ -18,15 +18,15 @@ using System.Data.DataSetExtensions;
 using System.Data.SQLite;
 using System.Reflection;
 
-namespace ArbiterCopyService{
-            public class  ArbiterCopy {
+namespace TranCopyService{
+            public class  TranCopy {
 
-                 internal  static System.Data.DataTable[]  	       arbiterCopyTables;
-				 internal  static Thread[]						   arbiterCopyThreads;
+                 internal  static System.Data.DataTable[]  	       tranCopyTables;
+				 internal  static Thread[]						   tranCopyThreads;
 
 
-                 internal  static System.Data.DataTable[]  	       arbiterCopyFilterTables;
-				 internal  static Thread[]						   arbiterCopyFilterThreads;            
+                 internal  static System.Data.DataTable[]  	       tranCopyFilterTables;
+				 internal  static Thread[]						   tranCopyFilterThreads;            
 		         internal  static Dictionary<string, string>       connectionStringMap     			    = new Dictionary<string,string>();	
 			     internal  static Dictionary<string, string>       partitionSizeIntervalMap   			= new Dictionary<string,string>();	    
 				 internal  static string                           sourceServerConnectionString;   
@@ -34,9 +34,9 @@ namespace ArbiterCopyService{
 
 				  internal  static string                          stagingConnectionString;
                  internal  static int 							   datePartitionInterval			    = 0;
-				 internal  static Dictionary<int,Thread>           arbiterCopyThreadMap                 = new Dictionary<int,Thread>();
+				 internal  static Dictionary<int,Thread>           tranCopyThreadMap                 = new Dictionary<int,Thread>();
 
-				  internal  static Dictionary<int,Thread>          arbiterCopyFilterThreadMap           = new Dictionary<int,Thread>();
+				  internal  static Dictionary<int,Thread>          tranCopyFilterThreadMap           = new Dictionary<int,Thread>();
 				 internal  static HashSet<Thread>          		   runningThreadSet                     = new HashSet<Thread>();
 				 internal  static Dictionary<Thread, DataTable>    threadTableMap     			        = new Dictionary<Thread, DataTable>();
 				 internal  static int                              numberOfTables						= 0; 
@@ -73,11 +73,13 @@ namespace ArbiterCopyService{
 
 				internal  static  string[]                  copyFilterScript;
 
+				
+
                    
 
 
-				 public ArbiterCopy(){
-						new  ArbiterCopyUtilLibrary();
+				 public TranCopy(){
+						new  TranCopyUtilLibrary();
 				DataTable table = new DataTable("PropertiesTable");
 			
 				DataColumn column;
@@ -111,32 +113,40 @@ namespace ArbiterCopyService{
 				PrimaryKeyColumns[0] = table.Columns["no."];
 				table.PrimaryKey = PrimaryKeyColumns;
 				
-				foreach (PropertyInfo prop in ArbiterCopyUtilLibrary.arbiterConfig.GetType().GetProperties())
+				foreach (PropertyInfo prop in TranCopyUtilLibrary.tranConfig.GetType().GetProperties())
 				{
 					
-					if(null!=prop.GetValue(ArbiterCopyUtilLibrary.arbiterConfig) && null!= prop.Name){
+					if(null!=prop.GetValue(TranCopyUtilLibrary.tranConfig) && null!= prop.Name){
 						row = table.NewRow();
 						row["parameter_name"]  = prop.Name;
-						row["parameter_value"] = string.IsNullOrWhiteSpace(prop.GetValue(ArbiterCopyUtilLibrary.arbiterConfig,  null).ToString())?"NULL":prop.GetValue(ArbiterCopyUtilLibrary.arbiterConfig,  null).ToString();
-						ArbiterCopyUtilLibrary.writeToLog(prop.Name+": "+row["parameter_value"]);
+						if(prop.Name.ToString().Trim()=="staging_server" && prop.GetValue(TranCopyUtilLibrary.tranConfig,  null).ToString().Trim()=="localhost" ){
+							row["parameter_value"] = "172.25.15.49";
+							
+						}else  if(prop.Name.ToString().Trim()=="destination_table_column_order" ){
+		
+							row["parameter_value"] =  string.Join(",", TranCopyUtilLibrary.destinationTableColumnOrder);
+						}else{	
+								row["parameter_value"] = string.IsNullOrWhiteSpace(prop.GetValue(TranCopyUtilLibrary.tranConfig,  null).ToString())?"NULL":prop.GetValue(TranCopyUtilLibrary.tranConfig,  null).ToString();						
+						}
+						TranCopyUtilLibrary.writeToLog(prop.Name+": "+row["parameter_value"]);
 						table.Rows.Add(row);
 					}
 						
 				}
 	
-				reportTableMap.Add("Arbiter Copy Session Parameters",table);
+				reportTableMap.Add("Tran Copy Session Parameters",table);
 
 
-						startArbiterCopy();
+						startTranCopy();
             	
 				 }
 
-                public ArbiterCopy(string  config){
+                public TranCopy(string  config){
 				  
 				
 					string  nuConfig   = config.Contains("\\\\")? config:config.Replace("\\", "\\\\");
 					if(File.Exists(nuConfig)){
-					new  ArbiterCopyUtilLibrary(nuConfig);
+					new  TranCopyUtilLibrary(nuConfig);
 					DataTable table = new DataTable("PropertiesTable");
 			
 				DataColumn column;
@@ -170,21 +180,21 @@ namespace ArbiterCopyService{
 				PrimaryKeyColumns[0] = table.Columns["no."];
 				table.PrimaryKey = PrimaryKeyColumns;
 				
-				foreach (PropertyInfo prop in ArbiterCopyUtilLibrary.arbiterConfig.GetType().GetProperties())
+				foreach (PropertyInfo prop in TranCopyUtilLibrary.tranConfig.GetType().GetProperties())
 				{
 					
-					if(null!=prop.GetValue(ArbiterCopyUtilLibrary.arbiterConfig) && null!= prop.Name){
+					if(null!=prop.GetValue(TranCopyUtilLibrary.tranConfig) && null!= prop.Name){
 						row = table.NewRow();
 						row["parameter_name"]  = prop.Name;
-						row["parameter_value"] = string.IsNullOrWhiteSpace(prop.GetValue(ArbiterCopyUtilLibrary.arbiterConfig,  null).ToString())?"NULL":prop.GetValue(ArbiterCopyUtilLibrary.arbiterConfig,  null).ToString();
-						ArbiterCopyUtilLibrary.writeToLog(prop.Name+": "+row["parameter_value"]);
+						row["parameter_value"] = string.IsNullOrWhiteSpace(prop.GetValue(TranCopyUtilLibrary.tranConfig,  null).ToString())?"NULL":prop.GetValue(TranCopyUtilLibrary.tranConfig,  null).ToString();
+						TranCopyUtilLibrary.writeToLog(prop.Name+": "+row["parameter_value"]);
 						table.Rows.Add(row);
 					}
 						
 				}
 	
-				reportTableMap.Add("Arbiter Copy Session Parameters",table);
-                   	startArbiterCopy();
+				reportTableMap.Add("Tran Copy Session Parameters",table);
+                   	startTranCopy();
 
 					} else{
 						
@@ -206,33 +216,33 @@ namespace ArbiterCopyService{
 						  return  "\'"+rawString+"\'";
 
 			  }
-                public void startArbiterCopy(){
+                public void startTranCopy(){
                    try{ 
                         
                         initConnectionStrings();
-						if(!File.Exists(ArbiterCopyUtilLibrary.copyScript)){
+						if(!File.Exists(TranCopyUtilLibrary.copyScript)){
 
-							 Console.WriteLine("Report source script "+ArbiterCopyUtilLibrary.copyScript+" does not exist.");
-							 ArbiterCopyUtilLibrary.writeToLog("Report source script "+ArbiterCopyUtilLibrary.copyScript+" does not exist.");
+							 Console.WriteLine("Report source script "+TranCopyUtilLibrary.copyScript+" does not exist.");
+							 TranCopyUtilLibrary.writeToLog("Report source script "+TranCopyUtilLibrary.copyScript+" does not exist.");
 							 Environment.Exit(0);
 
 						}
 						if( serverIsReachable(connectionStringMap["source"])){
-							if( string.IsNullOrEmpty(ArbiterCopyUtilLibrary.destinationTable)){
-								Console.WriteLine("No table has been specified for this Arbiter Copy session");
-								ArbiterCopyUtilLibrary.writeToLog("No table has been specified for this Arbiter Copy session");
+							if( string.IsNullOrEmpty(TranCopyUtilLibrary.destinationTable)){
+								Console.WriteLine("No table has been specified for this Tran Copy session");
+								TranCopyUtilLibrary.writeToLog("No table has been specified for this Tran Copy session");
                                 Environment.Exit(0);
 							}
 
-							DateTime startParameterValue	   =  DateTime.Now;// DateTime.ParseExact(ArbiterCopyUtilLibrary.copyStartParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
-                            DateTime endParameterValue	       =  DateTime.Now;// DateTime.ParseExact(ArbiterCopyUtilLibrary.copyEndParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture); ;
+							DateTime startParameterValue	   =  DateTime.Now;// DateTime.ParseExact(TranCopyUtilLibrary.copyStartParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+                            DateTime endParameterValue	       =  DateTime.Now;// DateTime.ParseExact(TranCopyUtilLibrary.copyEndParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture); ;
                            
-						     switch(ArbiterCopyUtilLibrary.arbiterCopyMode){
+						     switch(TranCopyUtilLibrary.tranCopyMode){
 
 								 case DAILY_COPY_MODE:
-								 startParameterValue = string.IsNullOrEmpty(ArbiterCopyUtilLibrary.copyStartParameterValue) || ArbiterCopyUtilLibrary.copyStartParameterValue =="default" ?DateTime.Now:DateTime.ParseExact(ArbiterCopyUtilLibrary.copyStartParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+								 startParameterValue = string.IsNullOrEmpty(TranCopyUtilLibrary.copyStartParameterValue) || TranCopyUtilLibrary.copyStartParameterValue =="default" ?DateTime.Now:DateTime.ParseExact(TranCopyUtilLibrary.copyStartParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
 
-								int  numOfPrevDays          = ArbiterCopyUtilLibrary.numOfDaysFromStart;
+								int  numOfPrevDays          = TranCopyUtilLibrary.numOfDaysFromStart;
 								endParameterValue           = startParameterValue.AddDays(-1*numOfPrevDays);
 
                             
@@ -245,18 +255,18 @@ namespace ArbiterCopyService{
 								while(currentVal   >= endParamVal){
 									Console.WriteLine("currentVal: "+currentVal.ToString());
 									copyDateMap.Add(numberOfTables, currentVal.ToString());
-									ArbiterCopyUtilLibrary.writeToLog("currentVal: "+currentVal.ToString());
+									TranCopyUtilLibrary.writeToLog("currentVal: "+currentVal.ToString());
 								    partitionSizeIntervalMap.Add(currentVal.ToString(), currentVal.ToString());
 									currentVal -=1; 
 									++numberOfTables;								
 								}
 								 break;
 								 case SPECIFIC_COPY_MODE:
-								  startParameterValue	   =  DateTime.ParseExact(ArbiterCopyUtilLibrary.copyStartParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
-                                 endParameterValue	       = DateTime.ParseExact(ArbiterCopyUtilLibrary.copyEndParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture); ;
+								  startParameterValue	   =  DateTime.ParseExact(TranCopyUtilLibrary.copyStartParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+                                 endParameterValue	       = DateTime.ParseExact(TranCopyUtilLibrary.copyEndParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture); ;
                                   numberOfTables           =  0;
                                     
-								   foreach(string  dateStr in  ArbiterCopyUtilLibrary.arbiterCopySpecificParamterValues){
+								   foreach(string  dateStr in  TranCopyUtilLibrary.tranCopySpecificParamterValues){
 									    copyDateMap.Add(numberOfTables,DateTime.ParseExact(dateStr, "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture).ToString("yyyy-MM-dd"));
 										partitionSizeIntervalMap.Add(DateTime.ParseExact(dateStr, "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture).ToString("yyyy-MM-dd"), DateTime.ParseExact(dateStr, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture).ToString("yyyy-MM-dd"));
                                         ++numberOfTables;
@@ -264,8 +274,8 @@ namespace ArbiterCopyService{
 
 								 break;
 								 case  RANGE_COPY_MODE:
-								  startParameterValue	   =  DateTime.ParseExact(ArbiterCopyUtilLibrary.copyStartParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
-                                   endParameterValue	       = DateTime.ParseExact(ArbiterCopyUtilLibrary.copyEndParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture); ;
+								  startParameterValue	   =  DateTime.ParseExact(TranCopyUtilLibrary.copyStartParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+                                   endParameterValue	       = DateTime.ParseExact(TranCopyUtilLibrary.copyEndParameterValue.Replace("-","").Replace("/",""), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture); ;
                                    numberOfTables   = 0;
 
 									    startParamVal = long.Parse(startParameterValue.ToString( "yyyyMMdd"));
@@ -280,83 +290,83 @@ namespace ArbiterCopyService{
 								 break;
 							 }
 									
-                  			    string copyScriptStr      =   File.ReadAllText(ArbiterCopyUtilLibrary.copyScript);
-							    string filterScriptStr    =  File.ReadAllText( ArbiterCopyUtilLibrary.arbiterFilterCopyScript);
+                  			    string copyScriptStr      =   File.ReadAllText(TranCopyUtilLibrary.copyScript);
+							    string filterScriptStr    =  File.ReadAllText( TranCopyUtilLibrary.tranFilterCopyScript);
 
-                    			getSchemaTable( copyScriptStr.Replace(ArbiterCopyUtilLibrary.copyStartParameter,"\'2000-01-01\'"));
-								getFilterTableSchema( filterScriptStr.Replace(ArbiterCopyUtilLibrary.copyStartParameter,"2000-01-01")
-								                                     .Replace("ARBITER_DESTINATION_TABLE",ArbiterCopyUtilLibrary.destinationTable));
+                    			getSchemaTable( copyScriptStr.Replace(TranCopyUtilLibrary.copyStartParameter,"\'2000-01-01\'"));
+								getFilterTableSchema( filterScriptStr.Replace(TranCopyUtilLibrary.copyStartParameter,"2000-01-01")
+								                                     .Replace("ARBITER_DESTINATION_TABLE",TranCopyUtilLibrary.destinationTable));
 
 								if(schemaTable.Columns.Count > 0 ){
 
-								arbiterCopyTables           		     = new System.Data.DataTable[numberOfTables];
-								arbiterCopyThreads     		 			 = new Thread[numberOfTables];
+								tranCopyTables           		     = new System.Data.DataTable[numberOfTables];
+								tranCopyThreads     		 			 = new Thread[numberOfTables];
 								
-							    arbiterCopyFilterTables      		     = new System.Data.DataTable[numberOfTables];
-								arbiterCopyFilterThreads     			 = new Thread[numberOfTables];
+							    tranCopyFilterTables      		     = new System.Data.DataTable[numberOfTables];
+								tranCopyFilterThreads     			 = new Thread[numberOfTables];
 								copyFilterScript						 = new string[numberOfTables];
-								ArbiterCopyUtilLibrary.concurrentThreads = numberOfTables;
+								TranCopyUtilLibrary.concurrentThreads = numberOfTables;
 								
 
                                 int threadCounter = 0;
 								foreach(KeyValuePair<string, string>  param in partitionSizeIntervalMap){
 									
-								 string  copySQL	         	= copyScriptStr.Replace(ArbiterCopyUtilLibrary.copyStartParameter,param.Key);
-								 copySQL    	      	        = copySQL.Replace(ArbiterCopyUtilLibrary.copyEndParameter, param.Value);
+								 string  copySQL	         	= copyScriptStr.Replace(TranCopyUtilLibrary.copyStartParameter,param.Key);
+								 copySQL    	      	        = copySQL.Replace(TranCopyUtilLibrary.copyEndParameter, param.Value);
                                 
-								 string  copyFilterSQL	        = filterScriptStr.Replace(ArbiterCopyUtilLibrary.copyStartParameter,param.Key);
-								 copyFilterSQL    	      	    = copyFilterSQL.Replace(ArbiterCopyUtilLibrary.copyEndParameter, param.Value)
-								                                            .Replace("ARBITER_DESTINATION_TABLE",ArbiterCopyUtilLibrary.destinationTable);
+								 string  copyFilterSQL	        = filterScriptStr.Replace(TranCopyUtilLibrary.copyStartParameter,param.Key);
+								 copyFilterSQL    	      	    = copyFilterSQL.Replace(TranCopyUtilLibrary.copyEndParameter, param.Value)
+								                                            .Replace("ARBITER_DESTINATION_TABLE",TranCopyUtilLibrary.destinationTable);
 
 								 
 								
 								  int  currentIndex				= threadCounter;
 								
-									  arbiterCopyThreads[currentIndex]  = 	new Thread(()=> {
+									  tranCopyThreads[currentIndex]  = 	new Thread(()=> {
 										
-										 runArbiterTransactionCopy("source",copySQL,currentIndex);
+										 runTranTransactionCopy("source",copySQL,currentIndex);
 									
 									});
-									arbiterCopyThreads[currentIndex].Name    =   "arbiterCopyThread."+currentIndex.ToString();
-									arbiterCopyThreadMap.Add(currentIndex,arbiterCopyThreads[currentIndex]);
+									tranCopyThreads[currentIndex].Name    =   "tranCopyThread."+currentIndex.ToString();
+									tranCopyThreadMap.Add(currentIndex,tranCopyThreads[currentIndex]);
 									copyFilterScript[currentIndex]  		=	 copyFilterSQL;
 
 
-									 arbiterCopyFilterThreads[currentIndex]  = 	new Thread(()=> {
+									 tranCopyFilterThreads[currentIndex]  = 	new Thread(()=> {
 										
-										 runArbiterTransactionCopyFilter("destination",copyFilterSQL,currentIndex);
+										 runTranTransactionCopyFilter("destination",copyFilterSQL,currentIndex);
 									
 									});
-									arbiterCopyFilterThreads[currentIndex].Name    =   "arbiterCopyThread."+currentIndex.ToString();
-									arbiterCopyFilterThreadMap.Add(currentIndex,arbiterCopyFilterThreads[currentIndex]);
+									tranCopyFilterThreads[currentIndex].Name    =   "tranCopyThread."+currentIndex.ToString();
+									tranCopyFilterThreadMap.Add(currentIndex,tranCopyFilterThreads[currentIndex]);
 									++threadCounter;
                         			}
 								
 						        Console.WriteLine("Count: "+numberOfTables.ToString());
 							    Console.WriteLine("Threads successfully initialized");
-							    ArbiterCopyUtilLibrary.writeToLog("Threads successfully initialized");
-							    Console.WriteLine("WAIT_INTERVAL: "+ArbiterCopyUtilLibrary.WAIT_INTERVAL.ToString());
-							    ArbiterCopyUtilLibrary.writeToLog("WAIT_INTERVAL: "+ArbiterCopyUtilLibrary.WAIT_INTERVAL.ToString());
-						        Console.WriteLine("ArbiterCopyUtilLibrary.concurrentThreads: "+ArbiterCopyUtilLibrary.concurrentThreads.ToString());
+							    TranCopyUtilLibrary.writeToLog("Threads successfully initialized");
+							    Console.WriteLine("WAIT_INTERVAL: "+TranCopyUtilLibrary.WAIT_INTERVAL.ToString());
+							    TranCopyUtilLibrary.writeToLog("WAIT_INTERVAL: "+TranCopyUtilLibrary.WAIT_INTERVAL.ToString());
+						        Console.WriteLine("TranCopyUtilLibrary.concurrentThreads: "+TranCopyUtilLibrary.concurrentThreads.ToString());
 							
-							//    foreach(Thread threadDetail in arbiterCopyThreads){
-								for(int i=0; i< arbiterCopyThreads.Length; i++){
+							//    foreach(Thread threadDetail in tranCopyThreads){
+								for(int i=0; i< tranCopyThreads.Length; i++){
 
 
                                         Console.WriteLine("Starting thread: "+i.ToString());
-										ArbiterCopyUtilLibrary.writeToLog("Starting thread: "+i.ToString());
-										if(arbiterCopyThreads[i]!= null) {
-									      arbiterCopyThreads[i].Start();
-										  runningThreadSet.Add(arbiterCopyThreads[i]);
+										TranCopyUtilLibrary.writeToLog("Starting thread: "+i.ToString());
+										if(tranCopyThreads[i]!= null) {
+									      tranCopyThreads[i].Start();
+										  runningThreadSet.Add(tranCopyThreads[i]);
 									   }
-									    if(arbiterCopyFilterThreads[i]!= null) {
-									      arbiterCopyFilterThreads[i].Start();
-										  runningThreadSet.Add(arbiterCopyFilterThreads[i]);
+									    if(tranCopyFilterThreads[i]!= null) {
+									      tranCopyFilterThreads[i].Start();
+										  runningThreadSet.Add(tranCopyFilterThreads[i]);
 									   }
 									
 									 
 							}
-							ArbiterCopyUtilLibrary.writeToLog("All threads started. Waiting for matching threads to finish");
+							TranCopyUtilLibrary.writeToLog("All threads started. Waiting for matching threads to finish");
 							Console.WriteLine("All threads started. Waiting for matching threads to finish");
 							 wait();
 																				
@@ -461,8 +471,8 @@ namespace ArbiterCopyService{
 								string  filterTableName               = "";
 								string  tranStagingTable              = "";
 								for (int  i=0; i< numberOfTables;  i++){
-								tranStagingTable                      = ArbiterCopyUtilLibrary.arbiterCopyTableNamePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType.ToLower()+"_"+i.ToString();
-								filterTableName                       = ArbiterCopyUtilLibrary.arbiterCopyFilterTablePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType.ToLower()+"_"+i.ToString();
+								tranStagingTable                      = TranCopyUtilLibrary.tranCopyTableNamePrefix+"_"+TranCopyUtilLibrary.tranCopyType.ToLower()+"_"+i.ToString();
+								filterTableName                       = TranCopyUtilLibrary.tranCopyFilterTablePrefix+"_"+TranCopyUtilLibrary.tranCopyType.ToLower()+"_"+i.ToString();
 
 								copyTransCountMap.Add(i, getAggregateFromTable("COUNT",tranStagingTable, "*", "staging" ));
 								copyFilterTransCountMap.Add(i, getAggregateFromTable("COUNT",filterTableName, "*", "staging" ));
@@ -479,9 +489,9 @@ namespace ArbiterCopyService{
 									row["transaction_copy_start_time"]   		  = copyStartTimeMap[i];
 									row["filter_copy_start_time"] 				  = copyFilterStartTimeMap[i] ;
 									TimeSpan tranCopyDuration                     = DateTime.Parse(copyEndTimeMap[i], System.Globalization.CultureInfo.InvariantCulture).Subtract(DateTime.Parse(copyStartTimeMap[i], System.Globalization.CultureInfo.InvariantCulture));
-									row["transaction_copy_duration"]    		  = String.Format("{0} hours, {1} minutes, {2} seconds", tranCopyDuration.Hours, tranCopyDuration.Minutes, tranCopyDuration.Seconds);		
+									row["transaction_copy_duration"]    		  = String.Format("{0} hour(s) {1} minute(s) {2} second(s)", tranCopyDuration.Hours, tranCopyDuration.Minutes, tranCopyDuration.Seconds);		
 									TimeSpan tranFilterCopyDuration               = DateTime.Parse(copyFilterEndTimeMap[i], System.Globalization.CultureInfo.InvariantCulture).Subtract(DateTime.Parse(copyFilterStartTimeMap[i], System.Globalization.CultureInfo.InvariantCulture));
-									row["filter_copy_duration"]  			      = String.Format("{0} hours, {1} minutes, {2} seconds", tranFilterCopyDuration.Hours, tranFilterCopyDuration.Minutes, tranFilterCopyDuration.Seconds);
+									row["filter_copy_duration"]  			      = String.Format("{0} hour(s) {1} minute(s) {2} second(s)", tranFilterCopyDuration.Hours, tranFilterCopyDuration.Minutes, tranFilterCopyDuration.Seconds);
 									row["transaction_staging_count"]  			  = copyTransCountMap[i];
 									row["filter_staging_count"]  			      = copyFilterTransCountMap[i];
 									row["inserted_transaction_count"]  			  = copyTransCountMap[i] - copyFilterTransCountMap[i];
@@ -489,15 +499,15 @@ namespace ArbiterCopyService{
 
 								}
 								
-								reportTableMap.Add("Arbiter Session Details",table);
+								reportTableMap.Add("Tran Session Details",table);
 
 
 
-							 if(ArbiterCopyUtilLibrary.sendEmailNotification)	sendMailNotification(reportTableMap);
+							 if(TranCopyUtilLibrary.sendEmailNotification)	sendMailNotification(reportTableMap);
 						} else{
                     
 					    Console.WriteLine("Could not get Schema for destination table");
-                        ArbiterCopyUtilLibrary.writeToLog("Could not get Schema for destination table");
+                        TranCopyUtilLibrary.writeToLog("Could not get Schema for destination table");
                         Environment.Exit(0);
 
                     }
@@ -505,8 +515,8 @@ namespace ArbiterCopyService{
 
 
 						}else{
-								Console.WriteLine("Unable to connect to source database: "+ArbiterCopyUtilLibrary.sourceServer);
-								ArbiterCopyUtilLibrary.writeToLog("Unable to connect to source database: "+ArbiterCopyUtilLibrary.sourceServer);
+								Console.WriteLine("Unable to connect to source database: "+TranCopyUtilLibrary.sourceServer);
+								TranCopyUtilLibrary.writeToLog("Unable to connect to source database: "+TranCopyUtilLibrary.sourceServer);
 								Environment.Exit(0);
 
 						}
@@ -518,56 +528,60 @@ namespace ArbiterCopyService{
                          Console.WriteLine("Error: " + e.ToString());
 						  Console.WriteLine("Error Message: " + e.Message);
                          Console.WriteLine(e.StackTrace);
-						 ArbiterCopyUtilLibrary.writeToLog("Error: " + e.ToString());
-						 ArbiterCopyUtilLibrary.writeToLog("Error Message: " + e.Message);
+						 TranCopyUtilLibrary.writeToLog("Error: " + e.ToString());
+						 TranCopyUtilLibrary.writeToLog("Error Message: " + e.Message);
 						 Console.WriteLine(e.ToString());
                    }
-				    // ArbiterCopyUtilLibrary.closeLogFile();
+				    // TranCopyUtilLibrary.closeLogFile();
               }
            			  public static void initConnectionStrings(){
  				  
- 				    sourceServerConnectionString    =  "Network Library=DBMSSOCN;Data Source=" +  ArbiterCopyUtilLibrary.sourceConnectionProps.getSourceServer() + ","+ArbiterCopyUtilLibrary.sourcePort+";database=" + ArbiterCopyUtilLibrary.sourceConnectionProps.getSourceDatabase()+ ";User id=" + ArbiterCopyUtilLibrary.sourceConnectionProps.getSourceUser()+ ";Password=" + ArbiterCopyUtilLibrary.sourceConnectionProps.getSourcePassword() + ";Connection Timeout=0;Pooling=false;Packet Size=8192;";     
-                     destServerConnectionString     =  "Network Library=DBMSSOCN;Data Source=" +  ArbiterCopyUtilLibrary.destinationConnectionProps.getSourceServer() + ","+ArbiterCopyUtilLibrary.destinationPort+";database=" + ArbiterCopyUtilLibrary.destinationConnectionProps.getSourceDatabase()+ ";User id=" +  ArbiterCopyUtilLibrary.destinationConnectionProps.getSourceUser()+ ";Password=" + ArbiterCopyUtilLibrary.destinationConnectionProps.getSourcePassword() + ";Connection Timeout=0;Pooling=false;Packet Size=8192;";    
-     				stagingConnectionString			=  "Network Library=DBMSSOCN;Data Source=" +  ArbiterCopyUtilLibrary.stagingConnectionProps.getSourceServer() + ","+ArbiterCopyUtilLibrary.stagingPort+";database=" + ArbiterCopyUtilLibrary.stagingConnectionProps.getSourceDatabase()+ ";User id=" +  ArbiterCopyUtilLibrary.stagingConnectionProps.getSourceUser()+ ";Password=" + ArbiterCopyUtilLibrary.stagingConnectionProps.getSourcePassword() + ";Connection Timeout=0;Pooling=false;Packet Size=8192;";    
+ 				    sourceServerConnectionString    =  "Network Library=DBMSSOCN;Data Source=" +  TranCopyUtilLibrary.sourceConnectionProps.getSourceServer() + ","+TranCopyUtilLibrary.sourcePort+";database=" + TranCopyUtilLibrary.sourceConnectionProps.getSourceDatabase()+ ";User id=" + TranCopyUtilLibrary.sourceConnectionProps.getSourceUser()+ ";Password=" + TranCopyUtilLibrary.sourceConnectionProps.getSourcePassword() + ";Connection Timeout=0;Pooling=false;Packet Size=8192;";     
+                     destServerConnectionString     =  "Network Library=DBMSSOCN;Data Source=" +  TranCopyUtilLibrary.destinationConnectionProps.getSourceServer() + ","+TranCopyUtilLibrary.destinationPort+";database=" + TranCopyUtilLibrary.destinationConnectionProps.getSourceDatabase()+ ";User id=" +  TranCopyUtilLibrary.destinationConnectionProps.getSourceUser()+ ";Password=" + TranCopyUtilLibrary.destinationConnectionProps.getSourcePassword() + ";Connection Timeout=0;Pooling=false;Packet Size=8192;";    
+     				stagingConnectionString			=  "Network Library=DBMSSOCN;Data Source=" +  TranCopyUtilLibrary.stagingConnectionProps.getSourceServer() + ","+TranCopyUtilLibrary.stagingPort+";database=" + TranCopyUtilLibrary.stagingConnectionProps.getSourceDatabase()+ ";User id=" +  TranCopyUtilLibrary.stagingConnectionProps.getSourceUser()+ ";Password=" + TranCopyUtilLibrary.stagingConnectionProps.getSourcePassword() + ";Connection Timeout=0;Pooling=false;Packet Size=8192;";    
 				    connectionStringMap.Add("source",sourceServerConnectionString);
  					connectionStringMap.Add("destination",destServerConnectionString);
 					connectionStringMap.Add("staging",stagingConnectionString);
   
 			  }
 
- 				public   void  runArbiterTransactionCopy(string sourceServer,  string bulkQuery, int tabInd ){
+ 				public   void  runTranTransactionCopy(string sourceServer,  string bulkQuery, int tabInd ){
 
 				Console.WriteLine("Table  index: "+tabInd.ToString());
 
 				string   targetConnectionString         = connectionStringMap[sourceServer];
-			 	arbiterCopyTables[tabInd]               = new DataTable();
-				string  tableName                       = ArbiterCopyUtilLibrary.arbiterCopyTableNamePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType.ToLower()+"_"+tabInd.ToString();
+			 	tranCopyTables[tabInd]               = new DataTable();
+				string  tableName                       = TranCopyUtilLibrary.tranCopyTableNamePrefix+"_"+TranCopyUtilLibrary.tranCopyType.ToLower()+"_"+tabInd.ToString();
 				copyTableNameMap.Add(tabInd,tableName);
 				try{
                 lock (locker)
                 {	Console.WriteLine("Running fetch script for table: "+tabInd.ToString());
 
-					if( ArbiterCopyUtilLibrary.fs.BaseStream != null){
-							ArbiterCopyUtilLibrary.writeToLog("Running fetch script for table: " + tabInd.ToString()+"\n"+bulkQuery);
+					if( TranCopyUtilLibrary.fs.BaseStream != null){
+							TranCopyUtilLibrary.writeToLog("Running fetch script for table: " + tabInd.ToString()+"\n"+bulkQuery);
 					}
 				}
 				copyStartTimeMap.Add(tabInd,DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 bulkCopyDataFromRemoteServer(bulkQuery, tableName);
+				string  stagingTableIndex     		 = "IF((SELECT  1  FROM sys.indexes WHERE name='ix_"+TranCopyUtilLibrary.tranCopyFilterField+" ' AND object_id = OBJECT_ID('dbo.["+tableName+"]' )) = 1) BEGIN  DROP INDEX [ix_"+TranCopyUtilLibrary.tranCopyFilterField+"]  ON  dbo.["+tableName+"]   END ";
+			     executeScript(stagingTableIndex, connectionStringMap["staging"]);               
+				stagingTableIndex     		 = 		   " CREATE INDEX [ix_"+TranCopyUtilLibrary.tranCopyFilterField+"]  ON ["+tableName+"] (["+TranCopyUtilLibrary.tranCopyFilterField+"]);";
+				executeScript(stagingTableIndex, connectionStringMap["staging"]);
 				copyEndTimeMap.Add(tabInd,DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
 
 			}catch(Exception e){
 
 						
 					
-								Console.WriteLine("Error while running bulk insert for table index: "+tabInd+" and name: "+arbiterCopyTables[tabInd].ToString()+". Error: " + e.Message);
+								Console.WriteLine("Error while running bulk insert for table index: "+tabInd+" and name: "+tranCopyTables[tabInd].ToString()+". Error: " + e.Message);
 								Console.WriteLine(e.StackTrace);
-								ArbiterCopyUtilLibrary.writeToLog("Error while running bulk insert script "+bulkQuery+": " + e.Message);
-								ArbiterCopyUtilLibrary.writeToLog(e.ToString());
-								ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
+								TranCopyUtilLibrary.writeToLog("Error while running bulk insert script "+bulkQuery+": " + e.Message);
+								TranCopyUtilLibrary.writeToLog(e.ToString());
+								TranCopyUtilLibrary.writeToLog(e.StackTrace);
 								Console.WriteLine(e.ToString());
 								emailError.AppendLine("<div style=\"color:red\">Error while running bulk insert script "+bulkQuery+": " + e.Message);
 								emailError.AppendLine("<div style=\"color:red\">"+e.StackTrace);
-								 if(ArbiterCopyUtilLibrary.sendEmailNotification)	sendMailNotification(reportTableMap);
+								 if(TranCopyUtilLibrary.sendMailOnError)	sendMailNotification(reportTableMap);
 					
 						}
 				}
@@ -582,7 +596,7 @@ namespace ArbiterCopyService{
 					  		 shouldWait               =  0;
 						     skippedCount			  =  0;
                              activeThreadCount        =  0;
-							 foreach(Thread arbCopyThread  in arbiterCopyThreads){
+							 foreach(Thread arbCopyThread  in tranCopyThreads){
 								
 								if(arbCopyThread.IsAlive){
 										++activeThreadCount;
@@ -590,7 +604,7 @@ namespace ArbiterCopyService{
 								}
 						 	}
 
-							 	 foreach(Thread arbCopyFilterThread  in arbiterCopyFilterThreads){
+							 	 foreach(Thread arbCopyFilterThread  in tranCopyFilterThreads){
 						
 								if(arbCopyFilterThread.IsAlive){
 										++activeThreadCount;
@@ -598,51 +612,55 @@ namespace ArbiterCopyService{
 								}
 						 	}
             
-                           if(completedThreadSet.Count !=arbiterCopyThreads.Length){
+                           if(completedThreadSet.Count !=tranCopyThreads.Length){
               
-					        for (int i =  0;  i< arbiterCopyThreads.Length; i++ ) {
+					        for (int i =  0;  i< tranCopyThreads.Length; i++ ) {
 						
-								if( !arbiterCopyThreads[i].IsAlive &&  !arbiterCopyFilterThreads[i].IsAlive){
+								if( !tranCopyThreads[i].IsAlive &&  !tranCopyFilterThreads[i].IsAlive){
+									
 									if(!completedThreadSet.Contains(i)){
 											completedThreadSet.Add(i);
-											Thread exportThread =  	new Thread(()=> {
+											
+											/* Thread exportThread =  	new Thread(()=> {
 										        exportDataToDestinationTable(i);
 									
 											});
 											exportThread.Start();
 											exportThread.Join();
-									}
+											*/
+									} 
 								} else{
 									++shouldWait;
 								}
 							}
 
 							if(shouldWait>0){
-									Console.WriteLine("Waiting for  " + ArbiterCopyUtilLibrary.WAIT_INTERVAL.ToString());
-								Thread.Sleep(ArbiterCopyUtilLibrary.WAIT_INTERVAL);  
+									Console.WriteLine("Waiting for  " + TranCopyUtilLibrary.WAIT_INTERVAL.ToString());
+								Thread.Sleep(TranCopyUtilLibrary.WAIT_INTERVAL);  
 							}
 
 							Console.WriteLine("Current completed thread count: "+completedThreadSet.Count.ToString());
 							Console.WriteLine("Current running count: "+activeThreadCount.ToString());
-							ArbiterCopyUtilLibrary.writeToLog("Current completed thread count: " + completedThreadSet.Count.ToString());
-							ArbiterCopyUtilLibrary.writeToLog("Current running thread count: "+activeThreadCount.ToString());
+							TranCopyUtilLibrary.writeToLog("Current completed thread count: " + completedThreadSet.Count.ToString());
+							TranCopyUtilLibrary.writeToLog("Current running thread count: "+activeThreadCount.ToString());
 						} else{
 
 
-							for (int i =  0;  i< arbiterCopyThreads.Length; i++ ) {
+							for (int i =  0;  i< tranCopyThreads.Length; i++ ) {
 
-								if( !arbiterCopyThreads[i].IsAlive &&  !arbiterCopyFilterThreads[i].IsAlive){
+								if( !tranCopyThreads[i].IsAlive &&  !tranCopyFilterThreads[i].IsAlive){
 										if(!completedThreadSet.Contains(i)){
 
 											completedThreadSet.Add(i);
 											
-											Thread exportThread =  	new Thread(()=> {
+										  /* 	Thread exportThread =  	new Thread(()=> {
 										
 													 exportDataToDestinationTable(i);
 									
 											});
 											exportThread.Start();
 											exportThread.Join();
+											*/
 											
 									     }else{
 
@@ -656,12 +674,16 @@ namespace ArbiterCopyService{
 						}
 						 Console.WriteLine("Current completed thread count: " + completedThreadSet.Count.ToString());
                 		Console.WriteLine("Current running count: " +activeThreadCount.ToString());
-               		    ArbiterCopyUtilLibrary.writeToLog("Current completed thread count: " + completedThreadSet.Count.ToString());
-                		ArbiterCopyUtilLibrary.writeToLog("Current running thread count: " + activeThreadCount.ToString());
-						if(skippedCount==arbiterCopyThreads.Length)break;
+               		    TranCopyUtilLibrary.writeToLog("Current completed thread count: " + completedThreadSet.Count.ToString());
+                		TranCopyUtilLibrary.writeToLog("Current running thread count: " + activeThreadCount.ToString());
+						if(skippedCount==tranCopyThreads.Length || shouldWait== 0){
+							
+							break;
+
+						} 
 				  }
 
-
+				exportAllDataToDestinationTable();
 
                
 
@@ -775,9 +797,9 @@ namespace ArbiterCopyService{
 					}
                          
 				   }catch(Exception e){
-								   ArbiterCopyUtilLibrary.writeToLog("Error while connecting to server: " + e.Message);
-								   ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
-								   ArbiterCopyUtilLibrary.writeToLog(e.ToString());
+								   TranCopyUtilLibrary.writeToLog("Error while connecting to server: " + e.Message);
+								   TranCopyUtilLibrary.writeToLog(e.StackTrace);
+								   TranCopyUtilLibrary.writeToLog(e.ToString());
 								   Console.WriteLine(e.ToString());
                         }
 						return isReachable;
@@ -792,7 +814,7 @@ namespace ArbiterCopyService{
                     using (SqlConnection serverConnection =  new SqlConnection(targetConnectionString)){
                     SqlCommand cmd = new SqlCommand(theScript, serverConnection);
                     Console.WriteLine("Executing script: "+theScript);
-                    ArbiterCopyUtilLibrary.writeToLog("Executing script: "+theScript);
+                    TranCopyUtilLibrary.writeToLog("Executing script: "+theScript);
                     cmd.CommandTimeout =0;
                     serverConnection.Open();
                     SqlDataReader  reader = cmd.ExecuteReader();
@@ -806,10 +828,10 @@ namespace ArbiterCopyService{
 						
 						 Console.WriteLine("Error while running script: "+theScript+". The error is: "+e.Message);
 						 Console.WriteLine("The fetch session would now be restarted");
-						 ArbiterCopyUtilLibrary.writeToLog("Error while running fetch script: "+theScript+". The error is: "+e.Message);
-						 ArbiterCopyUtilLibrary.writeToLog("The data fetch session would now be restarted");
+						 TranCopyUtilLibrary.writeToLog("Error while running fetch script: "+theScript+". The error is: "+e.Message);
+						 TranCopyUtilLibrary.writeToLog("The data fetch session would now be restarted");
 						 getDataFromSQL( theScript,  targetConnectionString );
-						 ArbiterCopyUtilLibrary.writeToLog(e.ToString());
+						 TranCopyUtilLibrary.writeToLog(e.ToString());
 					     emailError.AppendLine("<div style=\"color:red\">Error while running fetch script: "+theScript+". The error is: "+e.Message);
 						 emailError.AppendLine("<div style=\"color:red\">(Restarted):"+e.StackTrace);
 				
@@ -817,14 +839,14 @@ namespace ArbiterCopyService{
 						
 						Console.WriteLine("Error while running script: " + e.Message);
 						Console.WriteLine(e.StackTrace);
-						 ArbiterCopyUtilLibrary.writeToLog(e.ToString());
-						 ArbiterCopyUtilLibrary.writeToLog("Error while running script: " + e.Message);
-						 ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
+						 TranCopyUtilLibrary.writeToLog(e.ToString());
+						 TranCopyUtilLibrary.writeToLog("Error while running script: " + e.Message);
+						 TranCopyUtilLibrary.writeToLog(e.StackTrace);
 						 Console.WriteLine(e.ToString());
-						 ArbiterCopyUtilLibrary.writeToLog(e.ToString());
+						 TranCopyUtilLibrary.writeToLog(e.ToString());
 						emailError.AppendLine("<div style=\"color:red\">Error while running script: " + e.Message);
 						emailError.AppendLine("<div style=\"color:red\">"+e.StackTrace);
-						 if(ArbiterCopyUtilLibrary.sendEmailNotification)	sendMailNotification(reportTableMap);
+						 if(TranCopyUtilLibrary.sendMailOnError)	sendMailNotification(reportTableMap);
 								
 						 }
 					}
@@ -839,7 +861,7 @@ namespace ArbiterCopyService{
 
                                 using (SqlConnection serverConnection =  new SqlConnection(connectionStringMap["source"])){
 									SqlCommand cmd = new SqlCommand(script, serverConnection);
-									ArbiterCopyUtilLibrary.writeToLog("Executing script: "+script+" on source database.");
+									TranCopyUtilLibrary.writeToLog("Executing script: "+script+" on source database.");
 									cmd.CommandTimeout =0;
 									serverConnection.Open();
 									SqlDataReader  reader = cmd.ExecuteReader();
@@ -847,9 +869,9 @@ namespace ArbiterCopyService{
 									cmd.Dispose();
                         }
                         }catch(Exception e){
-								   ArbiterCopyUtilLibrary.writeToLog("Error while running script: " + e.Message);
-								   ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
-								   ArbiterCopyUtilLibrary.writeToLog(e.ToString());
+								   TranCopyUtilLibrary.writeToLog("Error while running script: " + e.Message);
+								   TranCopyUtilLibrary.writeToLog(e.StackTrace);
+								   TranCopyUtilLibrary.writeToLog(e.ToString());
 								   Console.WriteLine(e.ToString());
                         }
                         return dt;
@@ -861,7 +883,7 @@ namespace ArbiterCopyService{
 							using (SqlConnection serverConnection =  new SqlConnection(targetConnectionString)){
 									SqlCommand cmd = new SqlCommand(script, serverConnection);
 									Console.WriteLine("Executing script: "+script);
-									ArbiterCopyUtilLibrary.writeToLog("Executing script: "+script);
+									TranCopyUtilLibrary.writeToLog("Executing script: "+script);
 									cmd.CommandTimeout =0;
 									serverConnection.Open();
 									cmd.ExecuteNonQuery();
@@ -870,18 +892,46 @@ namespace ArbiterCopyService{
 
 									 Console.WriteLine("Error while running script: " + e.Message);
 									 Console.WriteLine(e.StackTrace);
-									 ArbiterCopyUtilLibrary.writeToLog("Error while running script: " + e.Message);
-									 ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
-									 ArbiterCopyUtilLibrary.writeToLog(e.ToString());
+									 TranCopyUtilLibrary.writeToLog("Error while running script: " + e.Message);
+									 TranCopyUtilLibrary.writeToLog(e.StackTrace);
+									 TranCopyUtilLibrary.writeToLog(e.ToString());
 									  Console.WriteLine(e.ToString());
 									 emailError.AppendLine("<div style=\"color:red\">Error while running script: " + e.Message);
 									 emailError.AppendLine("<div style=\"color:red\">"+e.StackTrace);
-									  if(ArbiterCopyUtilLibrary.sendEmailNotification)	sendMailNotification(reportTableMap);
+									  if(TranCopyUtilLibrary.sendMailOnError)	sendMailNotification(reportTableMap);
 
 							}
 				}
 
 
+public static void  restartableExecuteScript( string script, string  targetConnectionString){
+
+						try{
+							using (SqlConnection serverConnection =  new SqlConnection(targetConnectionString)){
+									SqlCommand cmd = new SqlCommand(script, serverConnection);
+									Console.WriteLine("Executing script: "+script);
+									TranCopyUtilLibrary.writeToLog("Executing script: "+script);
+									cmd.CommandTimeout =0;
+									serverConnection.Open();
+									cmd.ExecuteNonQuery();
+							}
+						}catch(Exception e){
+
+									 Console.WriteLine("Error while running script: " + e.Message);
+									 Console.WriteLine(e.StackTrace);
+									 TranCopyUtilLibrary.writeToLog("Error while running script: " + e.Message);
+									 TranCopyUtilLibrary.writeToLog(e.StackTrace);
+									 TranCopyUtilLibrary.writeToLog(e.ToString());
+									  Console.WriteLine(e.ToString());
+									 if(!e.Message.ToLower().Contains("filegroup")){
+									  restartableExecuteScript(script,targetConnectionString);
+									 }
+									 emailError.AppendLine("<div style=\"color:red\">Error while running script: " + e.Message);
+									 emailError.AppendLine("<div style=\"color:red\">"+e.StackTrace);
+									  if(TranCopyUtilLibrary.sendMailOnError)	sendMailNotification(reportTableMap);
+
+							}
+				}
 				
 			
 			 public static long getAggregateFromTable (string aggr, string tableName,string columnName, string server){
@@ -908,7 +958,7 @@ namespace ArbiterCopyService{
 									
                                 }						
 								bulkCopy.BulkCopyTimeout = 0; 
-								bulkCopy.BatchSize =  ArbiterCopyUtilLibrary.batchSize;
+								bulkCopy.BatchSize =  TranCopyUtilLibrary.batchSize;
 								bulkCopy.DestinationTableName = destTable;
 								bulkCopy.WriteToServer(dTab);
                             }
@@ -917,13 +967,13 @@ namespace ArbiterCopyService{
                        	
 								Console.WriteLine("Error while running bulk insert: " + e.Message);
 								Console.WriteLine(e.StackTrace);
-								ArbiterCopyUtilLibrary.writeToLog(e.ToString());
+								TranCopyUtilLibrary.writeToLog(e.ToString());
 								 Console.WriteLine(e.ToString());
-								ArbiterCopyUtilLibrary.writeToLog("Error while running bulk insert: " + e.Message);
-								ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
+								TranCopyUtilLibrary.writeToLog("Error while running bulk insert: " + e.Message);
+								TranCopyUtilLibrary.writeToLog(e.StackTrace);
 								emailError.AppendLine("<div style=\"color:red\">Error while running bulk insert: " + e.Message);
 								emailError.AppendLine("<div style=\"color:red\">"+e.StackTrace);
-								 if(ArbiterCopyUtilLibrary.sendEmailNotification)	sendMailNotification(reportTableMap);
+								 if(TranCopyUtilLibrary.sendMailOnError)	sendMailNotification(reportTableMap);
 						 
 					}
 
@@ -931,13 +981,13 @@ namespace ArbiterCopyService{
                 }
 
 
-	    public   static   void  runArbiterTransactionCopyFilter(string destinationServer,  string bulkQuery, int tabInd ){
+	    public   static   void  runTranTransactionCopyFilter(string destinationServer,  string bulkQuery, int tabInd ){
 
 				Console.WriteLine("Table  index: "+tabInd.ToString());
 
 				string   targetConnectionString         = connectionStringMap[destinationServer];
-			 	arbiterCopyFilterTables[tabInd]         = new DataTable();
-				string  tableName                       = ArbiterCopyUtilLibrary.arbiterCopyFilterTablePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType.ToLower()+"_"+tabInd.ToString();
+			 	tranCopyFilterTables[tabInd]         = new DataTable();
+				string  tableName                       = TranCopyUtilLibrary.tranCopyFilterTablePrefix+"_"+TranCopyUtilLibrary.tranCopyType.ToLower()+"_"+tabInd.ToString();
 				 if(!copyFilterTableNameMap.ContainsKey(tabInd)){
 					 copyFilterTableNameMap.Add(tabInd,tableName);
 				 }
@@ -945,8 +995,8 @@ namespace ArbiterCopyService{
                 lock (locker)
                 {	Console.WriteLine("Running fetch script for table: "+tabInd.ToString());
 
-					if( ArbiterCopyUtilLibrary.fs.BaseStream != null){
-							ArbiterCopyUtilLibrary.writeToLog("Running fetch script for table: " + tabInd.ToString()+"\n"+bulkQuery);
+					if( TranCopyUtilLibrary.fs.BaseStream != null){
+							TranCopyUtilLibrary.writeToLog("Running fetch script for table: " + tabInd.ToString()+"\n"+bulkQuery);
 					}
 				}
 				
@@ -958,16 +1008,22 @@ namespace ArbiterCopyService{
 						copyFilterEndTimeMap.Add(tabInd,DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
 					 }
 
+					string  filterTableIndex    		 = "IF((SELECT  1  FROM sys.indexes WHERE name='ix_"+TranCopyUtilLibrary.tranCopyFilterField+" ' AND object_id = OBJECT_ID('dbo.["+tableName+"]' )) = 1) BEGIN  DROP INDEX [ix_"+TranCopyUtilLibrary.tranCopyFilterField+"]  ON  dbo.["+tableName+"]   END ";
+				    executeScript(filterTableIndex,  connectionStringMap["staging"]);
+				    filterTableIndex    		 		=				 " CREATE INDEX [ix_"+TranCopyUtilLibrary.tranCopyFilterField+"]  ON ["+tableName+"] (["+TranCopyUtilLibrary.tranCopyFilterField+"]); ";
+					executeScript(filterTableIndex,  connectionStringMap["staging"]);
+			
+
 			 }catch(Exception e){
-						Console.WriteLine("Error while running bulk insert for table index: "+tabInd+" and name: "+arbiterCopyFilterTables[tabInd].ToString()+". Error: " + e.Message);
+						Console.WriteLine("Error while running bulk insert for table index: "+tabInd+" and name: "+tranCopyFilterTables[tabInd].ToString()+". Error: " + e.Message);
 						Console.WriteLine(e.StackTrace);
-						ArbiterCopyUtilLibrary.writeToLog("Error while running bulk insert script "+bulkQuery+": " + e.Message);
-						ArbiterCopyUtilLibrary.writeToLog(e.ToString());
-						ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
+						TranCopyUtilLibrary.writeToLog("Error while running bulk insert script "+bulkQuery+": " + e.Message);
+						TranCopyUtilLibrary.writeToLog(e.ToString());
+						TranCopyUtilLibrary.writeToLog(e.StackTrace);
 						Console.WriteLine(e.ToString());
 						emailError.AppendLine("<div style=\"color:red\">Error while running bulk insert script "+bulkQuery+": " + e.Message);
 						emailError.AppendLine("<div style=\"color:red\">"+e.StackTrace);
-						 if(ArbiterCopyUtilLibrary.sendEmailNotification)	sendMailNotification(reportTableMap);
+						 if(TranCopyUtilLibrary.sendMailOnError)	sendMailNotification(reportTableMap);
 			
 						}
 				}
@@ -984,7 +1040,7 @@ namespace ArbiterCopyService{
 
                     cmd = new SqlCommand(copyScript, serverConnection);
                     Console.WriteLine("Executing script: " + copyScript);
-                    ArbiterCopyUtilLibrary.writeToLog("Executing script: " + copyScript);
+                    TranCopyUtilLibrary.writeToLog("Executing script: " + copyScript);
                     cmd.CommandTimeout = 0;
                     if (serverConnection != null && serverConnection.State == ConnectionState.Closed)
                     {
@@ -994,11 +1050,11 @@ namespace ArbiterCopyService{
                     SqlDataReader reader = cmd.ExecuteReader();
                     using (SqlConnection bulkCopyConnection = new SqlConnection(stagingConnectionString))
                     {
-                        using (SqlBulkCopy bulkCopy = new SqlBulkCopy(bulkCopyConnection, SqlBulkCopyOptions.TableLock | SqlBulkCopyOptions.UseInternalTransaction, null))
+                        using (SqlBulkCopy bulkCopy = new SqlBulkCopy(bulkCopyConnection, SqlBulkCopyOptions.TableLock, null))
                         {
                             bulkCopyConnection.Open();
                             bulkCopy.BulkCopyTimeout	  = 0;
-                            bulkCopy.BatchSize 			  = ArbiterCopyUtilLibrary.batchSize;
+                            bulkCopy.BatchSize 			  = TranCopyUtilLibrary.batchSize;
 							bulkCopy.EnableStreaming      = false;
                             bulkCopy.DestinationTableName = destTable;
                             bulkCopy.WriteToServer(reader);
@@ -1006,6 +1062,7 @@ namespace ArbiterCopyService{
                     }
                     reader.Close();
                 }
+				
             }
             catch (Exception e)
             {
@@ -1013,9 +1070,9 @@ namespace ArbiterCopyService{
 					if(!e.Message.ToLower().Contains("filegroup")){
 								Console.WriteLine("Error while running fetch script: "+copyScript+". The error is: "+e.Message);
 								Console.WriteLine("The data fetch session would now be restarted");
-								ArbiterCopyUtilLibrary.writeToLog("Error while running fetch script: "+copyScript+". The error is: "+e.Message);
-								ArbiterCopyUtilLibrary.writeToLog("The data fetch session would now be restarted");
-								ArbiterCopyUtilLibrary.writeToLog(e.ToString());
+								TranCopyUtilLibrary.writeToLog("Error while running fetch script: "+copyScript+". The error is: "+e.Message);
+								TranCopyUtilLibrary.writeToLog("The data fetch session would now be restarted");
+								TranCopyUtilLibrary.writeToLog(e.ToString());
 								Console.WriteLine(e.ToString());
 								bulkCopyDataFromRemoteServer( copyScript,  destTable); 
 								emailError.AppendLine("<div style=\"color:red\">Error while running fetch script: "+copyScript +". The error is: "+e.Message);
@@ -1024,9 +1081,9 @@ namespace ArbiterCopyService{
 
 							Console.WriteLine("Error running bulk copy: " + e.Message);
 							Console.WriteLine(e.StackTrace);
-							ArbiterCopyUtilLibrary.writeToLog("Error running bulk copy: " + e.Message);
-							ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
-							 if(ArbiterCopyUtilLibrary.sendEmailNotification)	sendMailNotification(reportTableMap);
+							TranCopyUtilLibrary.writeToLog("Error running bulk copy: " + e.Message);
+							TranCopyUtilLibrary.writeToLog(e.StackTrace);
+							 if(TranCopyUtilLibrary.sendMailOnError)	sendMailNotification(reportTableMap);
 
 					}
                
@@ -1046,7 +1103,7 @@ namespace ArbiterCopyService{
 
                     cmd = new SqlCommand(copyScript, serverConnection);
                     Console.WriteLine("Executing script: " + copyScript);
-                    ArbiterCopyUtilLibrary.writeToLog("Executing script: " + copyScript);
+                    TranCopyUtilLibrary.writeToLog("Executing script: " + copyScript);
                     cmd.CommandTimeout = 0;
                     if (serverConnection != null && serverConnection.State == ConnectionState.Closed)
                     {
@@ -1056,11 +1113,11 @@ namespace ArbiterCopyService{
                     SqlDataReader reader = cmd.ExecuteReader();
                     using (SqlConnection bulkCopyConnection = new SqlConnection(stageConStr))
                     {
-                        using (SqlBulkCopy bulkCopy = new SqlBulkCopy(bulkCopyConnection, SqlBulkCopyOptions.TableLock | SqlBulkCopyOptions.UseInternalTransaction, null))
+                        using (SqlBulkCopy bulkCopy = new SqlBulkCopy(bulkCopyConnection, SqlBulkCopyOptions.TableLock , null))
                         {
                             bulkCopyConnection.Open();
                             bulkCopy.BulkCopyTimeout	  = 0;
-                            bulkCopy.BatchSize 			  = ArbiterCopyUtilLibrary.batchSize;
+                            bulkCopy.BatchSize 			  = TranCopyUtilLibrary.batchSize;
 							bulkCopy.EnableStreaming      = false;
                             bulkCopy.DestinationTableName = destTable;
                             bulkCopy.WriteToServer(reader);
@@ -1075,13 +1132,14 @@ namespace ArbiterCopyService{
 					if(!e.Message.ToLower().Contains("filegroup")){
 								Console.WriteLine("Error while running fetch script: "+copyScript+". The error is: "+e.Message);
 								Console.WriteLine("The data fetch session would now be restarted");
-								ArbiterCopyUtilLibrary.writeToLog("Error while running fetch script: "+copyScript+". The error is: "+e.Message);
-								ArbiterCopyUtilLibrary.writeToLog("The data fetch session would now be restarted");
-								ArbiterCopyUtilLibrary.writeToLog(e.ToString());
+								TranCopyUtilLibrary.writeToLog("Error while running fetch script: "+copyScript+". The error is: "+e.Message);
+								TranCopyUtilLibrary.writeToLog("The data fetch session would now be restarted");
+								TranCopyUtilLibrary.writeToLog(e.ToString());
 								Console.WriteLine(e.ToString());
-								 runArbiterTransactionCopyFilter("destination",copyFilterScript[tableIndex],tableIndex);
-								 string  filterTableIndex    		     =  "IF((SELECT  1  FROM sys.indexes WHERE name='[ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"] ' AND object_id = OBJECT_ID('dbo.["+copyFilterTableNameMap[tableIndex]+"]' )) = 1) BEGIN  DROP INDEX [ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  ON  dbo.["+copyFilterTableNameMap[tableIndex]+"]  END"+
-							                                        	     " CREATE INDEX [ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  ON ["+copyFilterTableNameMap[tableIndex]+"] (["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]);";
+								 runTranTransactionCopyFilter("destination",copyFilterScript[tableIndex],tableIndex);
+								 string  filterTableIndex    		     =  "IF((SELECT  1  FROM sys.indexes WHERE name='ix_"+TranCopyUtilLibrary.tranCopyFilterField+" ' AND object_id = OBJECT_ID('dbo.["+copyFilterTableNameMap[tableIndex]+"]' )) = 1) BEGIN  DROP INDEX [ix_"+TranCopyUtilLibrary.tranCopyFilterField+"]  ON  dbo.["+copyFilterTableNameMap[tableIndex]+"]  END";
+							    executeScript(filterTableIndex, connectionStringMap["staging"]);					   
+								filterTableIndex=	" CREATE INDEX [ix_"+TranCopyUtilLibrary.tranCopyFilterField+"]  ON ["+copyFilterTableNameMap[tableIndex]+"] (["+TranCopyUtilLibrary.tranCopyFilterField+"]);";
 								executeScript(filterTableIndex, connectionStringMap["staging"]);
 								bulkCopyToStagingServer( copyScript, destTable,connectionString,stageConStr,createTable,tableIndex); 
 								emailError.AppendLine("<div style=\"color:red\">Error while running fetch script: "+copyScript +". The error is: "+e.Message);
@@ -1089,9 +1147,9 @@ namespace ArbiterCopyService{
 					} else {
 							Console.WriteLine("Error running bulk copy: " + e.Message);
 							Console.WriteLine(e.StackTrace);
-							ArbiterCopyUtilLibrary.writeToLog("Error running bulk copy: " + e.Message);
-							ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
-							 if(ArbiterCopyUtilLibrary.sendEmailNotification)	sendMailNotification(reportTableMap);
+							TranCopyUtilLibrary.writeToLog("Error running bulk copy: " + e.Message);
+							TranCopyUtilLibrary.writeToLog(e.StackTrace);
+							 if(TranCopyUtilLibrary.sendMailOnError)	sendMailNotification(reportTableMap);
 
 					}
                
@@ -1118,8 +1176,8 @@ namespace ArbiterCopyService{
 
                 Console.WriteLine("Error getting  table schema from server with script:\n"+sqlScript +". \nError " + e.Message);
                 Console.WriteLine(e.StackTrace);
-                ArbiterCopyUtilLibrary.writeToLog("Error getting  table schema from server with script:\n" + sqlScript + ". \nError " + e.Message);
-                ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
+                TranCopyUtilLibrary.writeToLog("Error getting  table schema from server with script:\n" + sqlScript + ". \nError " + e.Message);
+                TranCopyUtilLibrary.writeToLog(e.StackTrace);
              
 
 
@@ -1132,38 +1190,28 @@ namespace ArbiterCopyService{
 				Console.WriteLine("Table  index: "+tabInd.ToString());
 
 				string   targetConnectionString      = connectionStringMap["destination"];
-				string   stagingTableName            = ArbiterCopyUtilLibrary.arbiterCopyTableNamePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType.ToLower()+"_"+tabInd.ToString();
-				string   filterTableName             = ArbiterCopyUtilLibrary.arbiterCopyFilterTablePrefix+"_"+ArbiterCopyUtilLibrary.arbiterCopyType.ToLower()+"_"+tabInd.ToString();
+				string   stagingTableName            = TranCopyUtilLibrary.tranCopyTableNamePrefix+"_"+TranCopyUtilLibrary.tranCopyType.ToLower()+"_"+tabInd.ToString();
+				string   filterTableName             = TranCopyUtilLibrary.tranCopyFilterTablePrefix+"_"+TranCopyUtilLibrary.tranCopyType.ToLower()+"_"+tabInd.ToString();
 				
-				string  stagingTableIndex     		 = "IF((SELECT  1  FROM sys.indexes WHERE name='[ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"] ' AND object_id = OBJECT_ID('dbo.["+stagingTableName+"]' )) = 1) BEGIN  DROP INDEX [ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  ON  dbo.["+stagingTableName+"]   END "+
-				                                       " CREATE INDEX [ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  ON ["+stagingTableName+"] (["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]);";
-				string  filterTableIndex    		 = "IF((SELECT  1  FROM sys.indexes WHERE name='[ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"] ' AND object_id = OBJECT_ID('dbo.["+filterTableName+"]' )) = 1) BEGIN  DROP INDEX [ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  ON  dbo.["+filterTableName+"]   END "+
-				                           			   " CREATE INDEX [ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  ON ["+filterTableName+"] (["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]);";
-			
-				executeScript(filterTableIndex,  connectionStringMap["staging"]);
-				executeScript(stagingTableIndex, connectionStringMap["staging"]);
-				
-				string  bulkInsertScript             = "SELECT  * FROM  ["+stagingTableName+"] WITH (NOLOCK, INDEX=ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+")  WHERE  ["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"] NOT IN (SELECT ["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  FROM  ["+filterTableName+"]   WITH (NOLOCK, INDEX=ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"))";
+
+				string  bulkInsertScript             = "SELECT  * FROM  ["+stagingTableName+"] WITH (NOLOCK)  WHERE  ["+TranCopyUtilLibrary.tranCopyFilterField+"] NOT IN (SELECT ["+TranCopyUtilLibrary.tranCopyFilterField+"]  FROM  ["+filterTableName+"]   WITH (NOLOCK))";
 			  try{
 				  
-
-                bulkCopyDataToDestinationServer(bulkInsertScript, ArbiterCopyUtilLibrary.destinationTable, connectionStringMap["destination"],tabInd);
+                bulkCopyDataToDestinationServer(bulkInsertScript, TranCopyUtilLibrary.destinationTable, connectionStringMap["destination"],tabInd);
                 
 			}catch(Exception e){
 
-						
-					
-								Console.WriteLine("Error while running bulk insert for table index: "+tabInd+" and name: "+arbiterCopyTables[tabInd].ToString()+". Error: " + e.Message);
+								Console.WriteLine("Error while running bulk insert for table index: "+tabInd+" and name: "+tranCopyTables[tabInd].ToString()+". Error: " + e.Message);
 								Console.WriteLine(e.StackTrace);
-								ArbiterCopyUtilLibrary.writeToLog(e.ToString());
-								ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
+								TranCopyUtilLibrary.writeToLog(e.ToString());
+								TranCopyUtilLibrary.writeToLog(e.StackTrace);
 								Console.WriteLine(e.ToString());
 								emailError.AppendLine("<div style=\"color:red\">"+e.StackTrace);
-								 if(ArbiterCopyUtilLibrary.sendEmailNotification)	sendMailNotification(reportTableMap);
+								if(TranCopyUtilLibrary.sendMailOnError)	sendMailNotification(reportTableMap);
 					
 						}
 				}
-		        public static void bulkCopyDataToDestinationServer( string copyScript, string destTable, string connectionStr, int tableIndex)
+				    public static void bulkCopyDataToDestinationServer( string copyScript, string destTable, string connectionStr)
         {
 
                          
@@ -1178,12 +1226,16 @@ namespace ArbiterCopyService{
 					foreach (DataColumn col in schmTable.Columns){
 				     columns.Add(col.ColumnName);
 					}
+					if(columns.Count==0){
+
+						 columns =  TranCopyUtilLibrary.destinationTableColumnOrder;
+					}
 
                     SqlCommand cmd = new SqlCommand(copyScript , serverConnection);
 
                     cmd = new SqlCommand(copyScript, serverConnection);
                     Console.WriteLine("Executing script: " + copyScript);
-                    ArbiterCopyUtilLibrary.writeToLog("Executing script: " + copyScript);
+                    TranCopyUtilLibrary.writeToLog("Executing script: " + copyScript);
                     cmd.CommandTimeout = 0;
                     if (serverConnection != null && serverConnection.State == ConnectionState.Closed)
                     {
@@ -1198,10 +1250,91 @@ namespace ArbiterCopyService{
 
                             bulkCopyConnection.Open();
                             bulkCopy.BulkCopyTimeout	  = 0;
+						
 							foreach(string  col in  columns){
 								bulkCopy.ColumnMappings.Add(col, col);
 							}
-                            bulkCopy.BatchSize 			  = ArbiterCopyUtilLibrary.batchSize;
+                            bulkCopy.BatchSize 			  = TranCopyUtilLibrary.batchSize;
+
+							/* 
+							bulkCopy.NotifyAfter = 1;
+						    bulkCopy.SqlRowsCopied += (sender, args) => {
+                                  ++totalRecordCount;
+							};   
+							*/
+                            bulkCopy.DestinationTableName = destTable;
+							  lock (locker){
+                           		 bulkCopy.WriteToServer(reader);
+								}
+                        }
+
+						
+                    }
+                    reader.Close();
+                }
+			
+            }
+            catch (Exception e)
+            {
+
+
+
+							Console.WriteLine("Error running bulk copy: " + e.Message);
+							Console.WriteLine(e.StackTrace);
+							TranCopyUtilLibrary.writeToLog("Error running bulk copy: " + e.Message);
+							TranCopyUtilLibrary.writeToLog(e.StackTrace);
+							emailError.AppendLine("<div style=\"color:red\">"+e.Message);
+							emailError.AppendLine("<div style=\"color:red\">"+e.StackTrace);
+							 if(TranCopyUtilLibrary.sendMailOnError)	sendMailNotification(reportTableMap);
+
+					
+               
+            }
+        }
+		        public static void bulkCopyDataToDestinationServer( string copyScript, string destTable, string connectionStr, int tableIndex)
+        {
+
+                         
+           try
+            {
+                using (SqlConnection serverConnection = new SqlConnection(stagingConnectionString))
+                {
+                    
+					DataTable schmTable = getColumns(copyScript, stagingConnectionString);
+					ArrayList columns   = new ArrayList();
+
+					foreach (DataColumn col in schmTable.Columns){
+				     columns.Add(col.ColumnName);
+					}
+					if(columns.Count==0){
+
+						 columns =  TranCopyUtilLibrary.destinationTableColumnOrder;
+					}
+
+                    SqlCommand cmd = new SqlCommand(copyScript , serverConnection);
+
+                    cmd = new SqlCommand(copyScript, serverConnection);
+                    Console.WriteLine("Executing script: " + copyScript);
+                    TranCopyUtilLibrary.writeToLog("Executing script: " + copyScript);
+                    cmd.CommandTimeout = 0;
+                    if (serverConnection != null && serverConnection.State == ConnectionState.Closed)
+                    {
+
+                        serverConnection.Open();
+                    }
+                    SqlDataReader reader = cmd.ExecuteReader();
+                    using (SqlConnection bulkCopyConnection = new SqlConnection(connectionStr))
+                    {
+                        using (SqlBulkCopy bulkCopy = new SqlBulkCopy(bulkCopyConnection, SqlBulkCopyOptions.UseInternalTransaction, null))
+                        {
+
+                            bulkCopyConnection.Open();
+                            bulkCopy.BulkCopyTimeout	  = 0;
+						
+							foreach(string  col in  columns){
+								bulkCopy.ColumnMappings.Add(col, col);
+							}
+                            bulkCopy.BatchSize 			  = TranCopyUtilLibrary.batchSize;
 
 							/* 
 							bulkCopy.NotifyAfter = 1;
@@ -1227,13 +1360,14 @@ namespace ArbiterCopyService{
 					if(!e.Message.ToLower().Contains("filegroup")){
 								Console.WriteLine("Error while running fetch script: "+copyScript+". The error is: "+e.Message);
 								Console.WriteLine("The data fetch session would now be restarted");
-								ArbiterCopyUtilLibrary.writeToLog("Error while running fetch script: "+copyScript+". The error is: "+e.Message);
-								ArbiterCopyUtilLibrary.writeToLog("The data fetch session would now be restarted");
-								ArbiterCopyUtilLibrary.writeToLog(e.ToString());
+								TranCopyUtilLibrary.writeToLog("Error while running fetch script: "+copyScript+". The error is: "+e.Message);
+								TranCopyUtilLibrary.writeToLog("The data fetch session would now be restarted");
+								TranCopyUtilLibrary.writeToLog(e.ToString());
 								Console.WriteLine(e.ToString());
-                                runArbiterTransactionCopyFilter("destination",copyFilterScript[tableIndex],tableIndex);
-								 string  filterTableIndex    		     =  "IF((SELECT  1  FROM sys.indexes WHERE name='[ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"] ' AND object_id = OBJECT_ID('dbo.["+copyFilterTableNameMap[tableIndex]+"]' )) = 1) BEGIN  DROP INDEX [ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  ON  dbo.["+copyFilterTableNameMap[tableIndex]+"]  END"+
-							                                        	     " CREATE INDEX [ix_"+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]  ON ["+copyFilterTableNameMap[tableIndex]+"] (["+ArbiterCopyUtilLibrary.arbiterCopyFilterField+"]);";
+                                runTranTransactionCopyFilter("destination",copyFilterScript[tableIndex],tableIndex);
+								 string  filterTableIndex    		     =  "IF((SELECT  1  FROM sys.indexes WHERE name='ix_"+TranCopyUtilLibrary.tranCopyFilterField+" ' AND object_id = OBJECT_ID('dbo.["+copyFilterTableNameMap[tableIndex]+"]' )) = 1) BEGIN  DROP INDEX [ix_"+TranCopyUtilLibrary.tranCopyFilterField+"]  ON  dbo.["+copyFilterTableNameMap[tableIndex]+"]  END";
+						        executeScript(filterTableIndex, connectionStringMap["staging"]);               	  
+								filterTableIndex    		     =   " CREATE INDEX [ix_"+TranCopyUtilLibrary.tranCopyFilterField+"]  ON ["+copyFilterTableNameMap[tableIndex]+"] (["+TranCopyUtilLibrary.tranCopyFilterField+"]);";
 								executeScript(filterTableIndex, connectionStringMap["staging"]);
 								bulkCopyDataToDestinationServer( copyScript,  destTable,connectionStr, tableIndex); 
 								emailError.AppendLine("<div style=\"color:red\">Error while running fetch script: "+copyScript +". The error is: "+e.Message);
@@ -1242,22 +1376,65 @@ namespace ArbiterCopyService{
 
 							Console.WriteLine("Error running bulk copy: " + e.Message);
 							Console.WriteLine(e.StackTrace);
-							ArbiterCopyUtilLibrary.writeToLog("Error running bulk copy: " + e.Message);
-							ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
-							 if(ArbiterCopyUtilLibrary.sendEmailNotification)	sendMailNotification(reportTableMap);
+							TranCopyUtilLibrary.writeToLog("Error running bulk copy: " + e.Message);
+							TranCopyUtilLibrary.writeToLog(e.StackTrace);
+							 if(TranCopyUtilLibrary.sendMailOnError)	sendMailNotification(reportTableMap);
 
 					}
                
             }
         }
 
+public static  void  exportAllDataToDestinationTable( ){
+
+				string   targetConnectionString      = connectionStringMap["destination"];
+				StringBuilder finalInsert         =  new StringBuilder();
+				string  tranStagingTablePrefix    = TranCopyUtilLibrary.tranCopyTableNamePrefix+"_"+TranCopyUtilLibrary.tranCopyType.ToLower(); 
+				string  filterTableNamePrefix     = TranCopyUtilLibrary.tranCopyFilterTablePrefix+"_"+TranCopyUtilLibrary.tranCopyType.ToLower(); 
+				string  insertScriptTemplate      = "SELECT  "+TranCopyUtilLibrary.finalSelectFields +"  FROM  [TRANSACTION_TABLE_PLACEHOLDER] WITH (NOLOCK)  WHERE  [tran_nr] NOT IN (SELECT [tran_nr]  FROM  [FILTER_TABLE_PLACEHOLDER]   WITH (NOLOCK))";
+
+				finalInsert.AppendLine( " SELECT  * FROM  ( ");
+
+				for(int  i=0; i< numberOfTables; i++){
+						finalInsert.AppendLine(insertScriptTemplate.Replace("TRANSACTION_TABLE_PLACEHOLDER", tranStagingTablePrefix+"_"+i.ToString()).Replace("FILTER_TABLE_PLACEHOLDER", filterTableNamePrefix+"_"+i.ToString()));
+						 finalInsert.AppendLine("  UNION ALL ");
+				}
+				for(int  j=0; j<12;  j++)finalInsert.Length--;
+
+				finalInsert.AppendLine(" ) insert_table");
+				
+
+			  try{
+				  
+               		// bulkCopyDataToDestinationServer(finalInsert.ToString(), TranCopyUtilLibrary.destinationTable, connectionStringMap["destination"]);
+					 string  finalStagingtable   =TranCopyUtilLibrary.filteredStagingTablePrefix+"_"+TranCopyUtilLibrary.tranCopyType+"_999";
+					 bulkCopyToStagingTable(finalInsert.ToString(),finalStagingtable, connectionStringMap["staging"],connectionStringMap["destination"],true );
+				     string  mergeSql      = TranCopyUtilLibrary.tableMergeScript.Replace("TABLE_INSERT_LIST",TranCopyUtilLibrary.finalSelectFields)
+					 															     .Replace("TEE_PREFIX_TABLE_INSERT_LIST","t."+TranCopyUtilLibrary.finalSelectFields.Replace(",",",t."))
+																					   .Replace("SOURCE_TABLE",finalStagingtable)
+																					    .Replace("TEE_PREFIX_TABLE_INSERT_LIST",TranCopyUtilLibrary.destinationTable);
+				  	    String  createIndexScript  = "CREATE INDEX ix_"+TranCopyUtilLibrary.tranCopyFilterField+" ON ["+TranCopyUtilLibrary.filteredStagingTablePrefix+"_"+TranCopyUtilLibrary.tranCopyType+"_999] (["+TranCopyUtilLibrary.tranCopyFilterField+"] );";
+						executeScript(createIndexScript,connectionStringMap["destination"]);
+					    restartableExecuteScript(mergeSql,connectionStringMap["destination"]);
+			    }catch(Exception e){
+
+								//Console.WriteLine("Error while running bulk insert for table index: "+tabInd+" and name: "+tranCopyTables[tabInd].ToString()+". Error: " + e.Message);
+								Console.WriteLine(e.StackTrace);
+								TranCopyUtilLibrary.writeToLog(e.ToString());
+								TranCopyUtilLibrary.writeToLog(e.StackTrace);
+								Console.WriteLine(e.ToString());
+								emailError.AppendLine("<div style=\"color:red\">"+e.StackTrace);
+								if(TranCopyUtilLibrary.sendMailOnError)	sendMailNotification(reportTableMap);
+					
+						}
+				}
         public static void getSchemaTable(string sqlScript)
         {
            try{
             sqlScript =sqlScript.Contains("#")? sqlScript:"SET FMTONLY ON \n" + sqlScript;
             string targetConnectionString = sourceServerConnectionString.Replace("Network Library=DBMSSOCN", "Provider=SQLOLEDB");
             using (OleDbDataAdapter oda = new OleDbDataAdapter(sqlScript, targetConnectionString))
-            {
+            { 
                 oda.SelectCommand.CommandTimeout = 0;
                 DataSet ds = new DataSet();
                 oda.Fill(ds);
@@ -1268,18 +1445,18 @@ namespace ArbiterCopyService{
             {
                 Console.WriteLine("Error getting  table schema from server with script:\n"+sqlScript +". \nError " + e.Message);
                 Console.WriteLine(e.StackTrace);
-                ArbiterCopyUtilLibrary.writeToLog("Error getting  table schema from server with script:\n" + sqlScript + ". \nError " + e.Message);
-                ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
+                TranCopyUtilLibrary.writeToLog("Error getting  table schema from server with script:\n" + sqlScript + ". \nError " + e.Message);
+                TranCopyUtilLibrary.writeToLog(e.StackTrace);
              
             }
 
 
-        }
+        } 
 
         public static void getFilterTableSchema(string sqlScript)
         {
            try{
-            sqlScript =sqlScript.Contains("#")? sqlScript:"SET FMTONLY ON \n" + sqlScript;
+            sqlScript =sqlScript.Contains("#")? sqlScript:"SET FMTONLY ON \n" + sqlScript.Replace(", INDEX=ix_"+TranCopyUtilLibrary.tranCopyFilterField,"");
             string targetConnectionString = destServerConnectionString.Replace("Network Library=DBMSSOCN", "Provider=SQLOLEDB");
             using (OleDbDataAdapter oda = new OleDbDataAdapter(sqlScript, targetConnectionString))
             {
@@ -1294,66 +1471,127 @@ namespace ArbiterCopyService{
 
                 Console.WriteLine("Error getting filter  table schema from server with script:\n"+sqlScript +". \nError " + e.Message);
                 Console.WriteLine(e.StackTrace);
-                ArbiterCopyUtilLibrary.writeToLog("Error getting filter table schema from server with script:\n" + sqlScript + ". \nError " + e.Message);
-                ArbiterCopyUtilLibrary.writeToLog(e.StackTrace);
+                TranCopyUtilLibrary.writeToLog("Error getting filter table schema from server with script:\n" + sqlScript + ". \nError " + e.Message);
+                TranCopyUtilLibrary.writeToLog(e.StackTrace);
              
             }
 
 
         }
 
+public static void bulkCopyToStagingTable( string copyScript, string destTable, string sourceConString,string destConStr,  bool createTable)
+        {
+             DataTable schmTable   =getColumns(copyScript,sourceConString);
+            if(createTable) createSQLTableFromDataTable(destTable, schmTable, destConStr);
+           try
+            {
+                using (SqlConnection serverConnection = new SqlConnection(sourceConString))
+                {
+                   
+                    SqlCommand cmd = new SqlCommand(copyScript , serverConnection);
+
+                    cmd = new SqlCommand(copyScript, serverConnection);
+                    Console.WriteLine("Executing script: " + copyScript);
+                    TranCopyUtilLibrary.writeToLog("Executing script: " + copyScript);
+                    cmd.CommandTimeout = 0;
+                    if (serverConnection != null && serverConnection.State == ConnectionState.Closed)
+                    {
+
+                        serverConnection.Open();
+                    }
+                    SqlDataReader reader = cmd.ExecuteReader();
+                    using (SqlConnection bulkCopyConnection = new SqlConnection(destConStr))
+                    {
+                        using (SqlBulkCopy bulkCopy = new SqlBulkCopy(bulkCopyConnection, SqlBulkCopyOptions.TableLock , null))
+                        {
+                            bulkCopyConnection.Open();
+                            bulkCopy.BulkCopyTimeout	  = 0;
+                            bulkCopy.BatchSize 			  = TranCopyUtilLibrary.batchSize;
+							bulkCopy.EnableStreaming      = false;
+                            bulkCopy.DestinationTableName = destTable;
+                            bulkCopy.WriteToServer(reader);
+                        }
+                    }
+                    reader.Close();
+                }
+            }
+            catch (Exception e)
+            {
+
+					if(!e.Message.ToLower().Contains("filegroup")){
+								Console.WriteLine("Error copying data to staging table with script: "+copyScript+". The error is: "+e.Message);
+								Console.WriteLine("The staging session would now be restarted");
+								TranCopyUtilLibrary.writeToLog("Error copying data to staging table with script: "+copyScript+". The error is: "+e.Message);
+								TranCopyUtilLibrary.writeToLog("The staging session would now be restarted");
+								TranCopyUtilLibrary.writeToLog(e.ToString());
+								Console.WriteLine(e.ToString());
+								bulkCopyToStagingTable(copyScript,  destTable,  sourceConString, destConStr ,   createTable);
+								emailError.AppendLine("<div style=\"color:red\">Error staging script: "+copyScript +". The error is: "+e.Message);
+								emailError.AppendLine("<div style=\"color:red\">(Restarted):"+e.StackTrace);
+					} else {
+							Console.WriteLine("Error running bulk copy: " + e.Message);
+							Console.WriteLine(e.StackTrace);
+							TranCopyUtilLibrary.writeToLog("Error running bulk copy: " + e.Message);
+							TranCopyUtilLibrary.writeToLog(e.StackTrace);
+							 if(TranCopyUtilLibrary.sendMailOnError)	sendMailNotification(reportTableMap);
+
+					}
+               
+            }
+        }
+
 public  static void sendMailNotification(Dictionary<string, DataTable> dTableMap){
 
 	            Console.WriteLine("Sending Notification... ");
-				ArbiterCopyUtilLibrary.writeToLog("Sending Notification... ");
+				TranCopyUtilLibrary.writeToLog("Sending Notification... ");
 				emailBody.AppendLine("<div style=\"color:black\">Hi, All.</div>");
 				emailBody.AppendLine("<div style=\"color:black\">\n</div>");
 				emailBody.AppendLine("<div style=\"color:black\">Trust this meets you well</div>");
 				emailBody.AppendLine("<div style=\"color:black\">\n</div>");
-				emailBody.AppendLine("<div style=\"color:black\">Please see report for "+ArbiterCopyUtilLibrary.arbiterCopyType+" Copy Session below: </div>");
+				emailBody.AppendLine("<div style=\"color:black\">Please see report for "+TranCopyUtilLibrary.tranCopyType+" Copy Session below: </div>");
                 MailMessage message = new MailMessage();
 
-				foreach (var address in ArbiterCopyUtilLibrary.toAddress.Split(new [] {ArbiterCopyUtilLibrary.emailSeparator}, StringSplitOptions.RemoveEmptyEntries)){
+				foreach (var address in TranCopyUtilLibrary.toAddress.Split(new [] {TranCopyUtilLibrary.emailSeparator}, StringSplitOptions.RemoveEmptyEntries)){
 						if(!string.IsNullOrWhiteSpace(address)){
 									message.To.Add(address);   	
 						}
 				}
-				foreach (var address in ArbiterCopyUtilLibrary.ccAddress.Split(new [] {ArbiterCopyUtilLibrary.emailSeparator}, StringSplitOptions.RemoveEmptyEntries)){
+				foreach (var address in TranCopyUtilLibrary.ccAddress.Split(new [] {TranCopyUtilLibrary.emailSeparator}, StringSplitOptions.RemoveEmptyEntries)){
 					if(!string.IsNullOrWhiteSpace(address)){
 					message.CC.Add(address);   	
 					}
 				}
-				foreach (var address in ArbiterCopyUtilLibrary.bccAddress.Split(new [] {ArbiterCopyUtilLibrary.emailSeparator}, StringSplitOptions.RemoveEmptyEntries)){
+				foreach (var address in TranCopyUtilLibrary.bccAddress.Split(new [] {TranCopyUtilLibrary.emailSeparator}, StringSplitOptions.RemoveEmptyEntries)){
 							if(!string.IsNullOrWhiteSpace(address)){
 										message.Bcc.Add(address);   	
 							}
 				}
 				Console.WriteLine("Sending Notification... ");
-				message.From = new MailAddress(ArbiterCopyUtilLibrary.fromAddress);				
-				message.Subject = "Arbiter Transaction Copy Report for "+ArbiterCopyUtilLibrary.arbiterCopyType+" at  "+DateTime.Now.ToString("yyyy-MM-dd hh:mm:ss");
+				message.From = new MailAddress(TranCopyUtilLibrary.fromAddress);				
+				message.Subject = "Tran Transaction Copy Report for "+TranCopyUtilLibrary.tranCopyType+" at  "+DateTime.Now.ToString("yyyy-MM-dd hh:mm:ss");
 				message.IsBodyHtml = true;
 		
 				emailBody.AppendLine("<style type=\"text/css\">");
 				emailBody.AppendLine("table.gridtable {");
-				emailBody.AppendLine("	font-family:"+ArbiterCopyUtilLibrary.emailFontFamily+";");
-				emailBody.AppendLine("	font-size:"+ArbiterCopyUtilLibrary.emailFontSize+";");
-				emailBody.AppendLine("	color:"+ArbiterCopyUtilLibrary.borderColour+";");
-				emailBody.AppendLine("	border-width:"+ArbiterCopyUtilLibrary.borderWidth+";");
-				emailBody.AppendLine("	border-color: "+ArbiterCopyUtilLibrary.borderColour+";");
+				emailBody.AppendLine("	font-family:"+TranCopyUtilLibrary.emailFontFamily+";");
+				emailBody.AppendLine("	font-size:"+TranCopyUtilLibrary.emailFontSize+";");
+				emailBody.AppendLine("	color:"+TranCopyUtilLibrary.borderColour+";");
+				emailBody.AppendLine("	border-width:"+TranCopyUtilLibrary.borderWidth+";");
+				emailBody.AppendLine("	border-color: "+TranCopyUtilLibrary.borderColour+";");
 				emailBody.AppendLine("	border-collapse: collapse;");
 				emailBody.AppendLine("}");
 				emailBody.AppendLine("table.gridtable th {");
-				emailBody.AppendLine("	border-width: "+ArbiterCopyUtilLibrary.borderWidth+";");
+				emailBody.AppendLine("	border-width: "+TranCopyUtilLibrary.borderWidth+";");
 				emailBody.AppendLine("	padding: 8px;");
 				emailBody.AppendLine("	border-style: solid;");
-				emailBody.AppendLine("	border-color:"+ArbiterCopyUtilLibrary.borderColour+";");
-				emailBody.AppendLine("	background-color:"+ArbiterCopyUtilLibrary.headerBgColor+";");
+				emailBody.AppendLine("	border-color:"+TranCopyUtilLibrary.borderColour+";");
+				emailBody.AppendLine("	background-color:"+TranCopyUtilLibrary.headerBgColor+";");
 				emailBody.AppendLine("}");
 				emailBody.AppendLine("table.gridtable td {");
 				emailBody.AppendLine("	border-width: 1px;");
 				emailBody.AppendLine("	padding: 8px;");
 				emailBody.AppendLine("	border-style: solid;");
-				emailBody.AppendLine("	border-color: "+ArbiterCopyUtilLibrary.borderColour+";");
+				emailBody.AppendLine("	border-color: "+TranCopyUtilLibrary.borderColour+";");
 				emailBody.AppendLine("}");
 				emailBody.AppendLine("</style>");
 				
@@ -1378,7 +1616,7 @@ public  static void sendMailNotification(Dictionary<string, DataTable> dTableMap
                       if(k%2!=0){
 								emailBody.AppendLine("<tr style=\"background-color:#ffffff\"> ");   // <td>"+row["INDEX_NO"]+"</td><td>"+row["PARAMETER"]+"</td><td>"+row["VALUE"]+"</td></tr>");
 					    } else{
-								emailBody.AppendLine("<tr style=\"background-color:"+ArbiterCopyUtilLibrary.alternateRowColour+"\">"); //<td>"+row["INDEX_NO"]+"</td><td>"+row["PARAMETER"]+"</td><td>"+row["VALUE"]+"</td></tr>");
+								emailBody.AppendLine("<tr style=\"background-color:"+TranCopyUtilLibrary.alternateRowColour+"\">"); //<td>"+row["INDEX_NO"]+"</td><td>"+row["PARAMETER"]+"</td><td>"+row["VALUE"]+"</td></tr>");
 					  }
 					
 					  foreach(DataColumn dCol in  reportTabMap.Value.Columns){
@@ -1408,10 +1646,10 @@ public  static void sendMailNotification(Dictionary<string, DataTable> dTableMap
 			SmtpClient smtpClient = new SmtpClient();
 			smtpClient.UseDefaultCredentials = true;
 
-			smtpClient.Host = ArbiterCopyUtilLibrary.smtpServer;
-			smtpClient.Port = Int32.Parse(ArbiterCopyUtilLibrary.smtpPort.ToString());
-			smtpClient.EnableSsl = ArbiterCopyUtilLibrary.isSSLEnabled;
-			smtpClient.Credentials = new System.Net.NetworkCredential(ArbiterCopyUtilLibrary.sender, ArbiterCopyUtilLibrary.senderPassword);
+			smtpClient.Host = TranCopyUtilLibrary.smtpServer;
+			smtpClient.Port = Int32.Parse(TranCopyUtilLibrary.smtpPort.ToString());
+			smtpClient.EnableSsl = TranCopyUtilLibrary.isSSLEnabled;
+			smtpClient.Credentials = new System.Net.NetworkCredential(TranCopyUtilLibrary.sender, TranCopyUtilLibrary.senderPassword);
 			smtpClient.Send(message);
 
 		}
@@ -1424,10 +1662,10 @@ public  static void sendMailNotification(Dictionary<string, DataTable> dTableMap
 					   stagingTableDeleteScript            = " IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].["+copyTableNameMap[i]+"]') AND type in (N'U')) BEGIN  DROP TABLE ["+copyTableNameMap[i]+"] END";
 					   filterTableDeleteScript             = " IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].["+copyFilterTableNameMap[i]+"]') AND type in (N'U')) BEGIN  DROP TABLE ["+copyFilterTableNameMap[i]+"] END";
 					   Console.WriteLine("Removing filter table: "+copyFilterTableNameMap[i]+"...");
-					   ArbiterCopyUtilLibrary.writeToLog("Removing filter table: "+copyFilterTableNameMap[i]+"...");
+					   TranCopyUtilLibrary.writeToLog("Removing filter table: "+copyFilterTableNameMap[i]+"...");
 					   executeScript(filterTableDeleteScript, connectionStringMap["staging"]);				
 					   Console.WriteLine("Removing staging table: "+copyTableNameMap[i]+"...");
-					   ArbiterCopyUtilLibrary.writeToLog("Removing staging table: "+copyTableNameMap[i]+"...");
+					   TranCopyUtilLibrary.writeToLog("Removing staging table: "+copyTableNameMap[i]+"...");
 					  executeScript(stagingTableDeleteScript, connectionStringMap["staging"]);
 					
 					}
@@ -1464,10 +1702,10 @@ public  static void sendMailNotification(Dictionary<string, DataTable> dTableMap
 			
 					 if(string.IsNullOrEmpty(configFile)){
 						 
-						 new  ArbiterCopy();
+						 new  TranCopy();
 						 
 					 }else {					
-							new  ArbiterCopy(configFile);
+							new  TranCopy(configFile);
 					 }
 					
 					}catch(Exception e) {

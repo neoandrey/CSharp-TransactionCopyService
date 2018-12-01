@@ -3,7 +3,7 @@ using System.Collections.Specialized;
 using System;
 using System.Text;
 
-namespace ArbiterCopyService{
+namespace TranCopyService{
 	
 public class ConnectionCipher {
     

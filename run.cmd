@@ -12,6 +12,6 @@ if  %commit_response%==y (
 ) 
 
 cd %cd%
-%cd%\bin\ArbiterCopy.exe
+%cd%\bin\TranCopy.exe
 
 pause
