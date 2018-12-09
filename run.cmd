@@ -37,18 +37,17 @@ if  [%commit_response%]==y (
 set /p commit_response=  
 
 if  %commit_response%==y (
-
-   IF EXIST ".\remote_repo.txt" (
-     set /p url= < .\remote_repo.txt
-     echo "loaded repo: %url%"
-) ELSE (
-echo "Please type the URL of the remote repository: "
-  set /p url=
-  if  [%url%] neq [] (
-      echo "saving remote %url%"
-    echo %url%>.\remote_repo.txt
-  )
-)
+    echo "checking saved remote repo..."
+    IF EXIST ".\remote_repo.txt" (
+      set /p url= < .\remote_repo.txt
+      echo "loaded repo: %url%"
+  ) ELSE (
+  echo "Please type the URL of the remote repository: "
+    set /p url=
+    if  [%url%] neq [] (
+        echo "saving remote %url%"
+      echo %url%>.\remote_repo.txt
+    ) )
 git remote > .\tmpFile
 set /p remote_repo_name= < .\tmpFile
 del .\tmpFile
