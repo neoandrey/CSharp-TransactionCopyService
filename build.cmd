@@ -7,8 +7,9 @@ if not exist .git\ (
    git init 
    git config  user.email  "neoandrey@yahoo.com"
    git config  user.name   "neoandrey@yahoo.com"
-   echo "log" >.gitignore
+   echo "log" >>.gitignore
+   echo "bin" >>.gitignore
    git add . 
-   git commit -m "Initialize TranCopy Application " 
+   git commit -m "Initialize Application " 
 )
 
