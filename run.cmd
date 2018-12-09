@@ -34,27 +34,26 @@ if  [%commit_response%]==y (
 )
 
  echo "Do you want to push to the remote master branch? (type  'y' or  'n'):"
-set /p commit_response=  
-
+ set /p commit_response=
 if  %commit_response%==y (
     echo "checking saved remote repo..."
-    IF EXIST ".\remote_repo.txt" (
-      set /p url= < .\remote_repo.txt
-      echo "loaded repo: %url%"
+    IF EXIST "%cd%\remote_repo.txt" (
+      set /p url= <.\remote_repo.txt
+      echo "loaded repo: "+ %url%
   ) ELSE (
   echo "Please type the URL of the remote repository: "
     set /p url=
     if  [%url%] neq [] (
         echo "saving remote %url%"
-      echo %url%>.\remote_repo.txt
+      echo %url%>%cd%\remote_repo.txt
     ) )
-git remote > .\tmpFile
-set /p remote_repo_name= < .\tmpFile
-del .\tmpFile
+git remote>%cd%\tmpFile
+set /p remote_repo_name= <%cd%\tmpFile
+del /f %cd%\tmpFile
 set  bool=F
 if [%remote_repo_name%]==[]  set  bool=T
 if [%remote_repo_name%]==n  set  bool=T
-     echo "isOriginSet: %T%"
+     echo "isOriginSet: %bool%"
  if  [%bool%]==T (
 
    echo "git remote add origin %url%"
