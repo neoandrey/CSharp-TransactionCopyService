@@ -33,13 +33,14 @@ if  [%commit_response%]==y (
 )
 )
 
- echo "Do you want to push to the  remote master branch? (type  'y' or  'n'):"
+ echo "Do you want to push to the remote master branch? (type  'y' or  'n'):"
 set /p commit_response=  
 
 if  %commit_response%==y (
 
    IF EXIST ".\remote_repo.txt" (
      set /p url= < .\remote_repo.txt
+     echo "loaded repo: %url%"
 ) ELSE (
 echo "Please type the URL of the remote repository: "
   set /p url=
@@ -54,8 +55,9 @@ del .\tmpFile
 set  bool=F
 if [%remote_repo_name%]==[]  set  bool=T
 if [%remote_repo_name%]==n  set  bool=T
-
+     echo "isOriginSet: %T%"
  if  [%bool%]==T (
+
    echo "git remote add origin %url%"
    git remote add origin %url%
   )
