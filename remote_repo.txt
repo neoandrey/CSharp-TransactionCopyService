@@ -1,1 +1,1 @@
-git@github.com:neoandrey/CSharp-TransactionCopyService.git
+https://github.com/neoandrey/CSharp-TransactionCopyService.git
