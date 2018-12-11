@@ -33,7 +33,7 @@
 
  $push_response=  Read-Host -Prompt "Do you want to push to the remote master branch? (type  'y' or  'n')"
  while ($push_response -eq $null){
-  $push_response=  Read-Host -Prompt "Do you want to push to the remote master branch? (type  'y' or  'n')"
+       $push_response=  Read-Host -Prompt "Do you want to push to the remote master branch? (type  'y' or  'n')"
  }
  if($push_response -eq 'y' ){
    Write-Host 'Checking saved remote repo...'
@@ -66,6 +66,7 @@
          while ($push_branch -eq $null){
             $push_branch =  Read-Host -Prompt  "Please type the name of the branch you wish to push" 
          }
+         Write-Host "Running command git push -u origin $push_branch..." 
          git push -u origin $push_branch
          Write-Host "checking remote branch: " 
          git remote 
