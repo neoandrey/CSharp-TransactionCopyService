@@ -36,12 +36,15 @@
        $push_response=  Read-Host -Prompt "Do you want to push to the remote master branch? (type  'y' or  'n')"
  }
  if($push_response -eq 'y' ){
-   Write-Host 'Checking saved remote repo...'
+  
    $filepath ="$pwd\remote_repo.txt"
+    Write-Host "Checking saved remote repo in $pwd\remote_repo.txt "
    if(![System.IO.File]::Exists($filepath)){
         $remote_repo_url = Get-Content $filepath
       }
 
+
+      Write-Host  "Saved remote repo "$remote_repo_url
       if($remote_repo_url -eq $null){
           $remote_repo_url  =  Read-Host -Prompt  "Please type the URL of the remote repository"
 
