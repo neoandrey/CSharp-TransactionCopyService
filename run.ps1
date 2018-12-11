@@ -1,4 +1,25 @@
-﻿git branch
+﻿$proxypath ="$pwd\proxy.txt"
+    Write-Host "Checking proxy file $proxypath "
+   if([System.IO.File]::Exists($proxypath)){
+        $proxy_string = Get-Content $proxypath
+      }else {
+         Write-Host "proxy file does not exist"
+     }
+if ($proxy_string -eq $null) { 
+        $proxy= Read-Host -Prompt   "Please  type the address of the proxy"
+        $port = Read-Host -Prompt   "Please  type the port of the proxy"
+         Write-Host "Setting  proxy..."
+         SET HTTP_PROXY="http://$proxy`:$port"
+         SET HTTPS_PROXY="http://$proxy`:$port"
+         echo  "http://$proxy`:$port" | Out-File -FilePath "$pwd\proxy.txt" 
+ }else {
+         SET HTTP_PROXY=$proxy_string
+         SET HTTPS_PROXY=$proxy_string
+ 
+ }
+
+ Write-Host "Listing branches..."
+ git branch
  $shouldCommit = Read-Host -Prompt "Do you want to commit the application on the current  branch? (type  'y' or  'n')"
  while ($shouldCommit -eq $null){
     $shouldCommit = Read-Host -Prompt "Do you want to commit the application on the current  branch? (type  'y' or  'n')"
@@ -39,7 +60,7 @@
   
    $filepath ="$pwd\remote_repo.txt"
     Write-Host "Checking saved remote repo in $pwd\remote_repo.txt "
-   if(![System.IO.File]::Exists($filepath)){
+   if([System.IO.File]::Exists($filepath)){
         $remote_repo_url = Get-Content $filepath
       }
 
