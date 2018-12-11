@@ -1,1 +1,1 @@
-ECHO is off.
+ "http://trendgate.interswitchng.com:8080"

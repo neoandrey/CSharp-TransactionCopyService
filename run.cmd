@@ -5,9 +5,9 @@
    SET /p proxy_url=<"%proxy_filepath%"
  )  ELSE (
    echo "Please type proxy URL:"
-      set /p proxy_url=
-      echo  %proxy_url%>%cd%\proxy.txt
+      set /p proxy_url=    
  )
+echo  "%proxy_url%">%cd%\proxy.txt
  echo "setting proxy as:%proxy_url%"
  SET  HTTP_PROXY=%proxy_url%
  SET  HTTPS_PROXY=%proxy_url%
