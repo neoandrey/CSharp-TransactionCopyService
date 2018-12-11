@@ -2,6 +2,7 @@
     Write-Host "Checking proxy file $proxypath "
    if([System.IO.File]::Exists($proxypath)){
         $proxy_string = Get-Content $proxypath
+        $proxy_string = $proxy_string.Trim()
       }else {
          Write-Host "proxy file does not exist"
      }
@@ -9,12 +10,18 @@ if ($proxy_string -eq $null) {
         $proxy= Read-Host -Prompt   "Please  type the address of the proxy"
         $port = Read-Host -Prompt   "Please  type the port of the proxy"
          Write-Host "Setting  proxy..."
-         SET HTTP_PROXY="http://$proxy`:$port"
-         SET HTTPS_PROXY="http://$proxy`:$port"
+         #SET HTTP_PROXY="http://$proxy`:$port"
+         #SET HTTPS_PROXY="http://$proxy`:$port"
+
+             [Environment]::SetEnvironmentVariable('http_proxy', "http://$proxy`:$port", 'User')
+    [Environment]::SetEnvironmentVariable('https_proxy', "http://$proxy`:$port", 'User')
+
+
          echo  "http://$proxy`:$port" | Out-File -FilePath "$pwd\proxy.txt" 
  }else {
-         SET HTTP_PROXY=$proxy_string
-         SET HTTPS_PROXY=$proxy_string
+         Write-Host "Setting  proxy to $proxy_string"
+    [Environment]::SetEnvironmentVariable('http_proxy', $proxy_string, 'User')
+    [Environment]::SetEnvironmentVariable('https_proxy', $proxy_string, 'User')
  
  }
 
